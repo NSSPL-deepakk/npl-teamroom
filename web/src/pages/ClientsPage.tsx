@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { Drawer } from '../components/Drawer';
 import { StatusTag } from '../components/Ledger';
+import { ConfirmDialog } from '../components/ConfirmDialog';
 import { useClients, type Client } from '../data/clients';
 import { useProjects } from '../data/projects';
 import type { Role } from '../data/roles';
@@ -9,6 +10,7 @@ import type { Role } from '../data/roles';
 type Ctx = { role: Role };
 
 const inputStyle = { borderColor: 'var(--line)', borderRadius: 'var(--radius-sm)' } as const;
+type ClientToggle = { id: string; action: 'activate' | 'deactivate' } | null;
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
     return (
@@ -38,6 +40,7 @@ export default function ClientsPage() {
     const [source, setSource] = useState<Client['source']>('');
     const [type, setType] = useState<'INTERNAL' | 'EXTERNAL'>('INTERNAL');
     const [status, setStatus] = useState<'ACTIVE' | 'INACTIVE'>('ACTIVE');
+    const [clientToggle, setClientToggle] = useState<ClientToggle>(null);
 
     const selectedClient = useMemo(
         () => clients.find((client) => client.id === selectedClientId) ?? clients[0] ?? null,
@@ -184,7 +187,7 @@ export default function ClientsPage() {
                                                             <button onClick={() => openEdit(client)} className="font-mono text-[11px] uppercase tracking-wide hover:underline" style={{ color: 'var(--text-secondary)' }}>
                                                                 Edit
                                                             </button>
-                                                            <button onClick={() => toggleStatus(client.id)} className="font-mono text-[11px] uppercase tracking-wide hover:underline" style={{ color: 'var(--status-pending)' }}>
+                                                            <button onClick={() => setClientToggle({ id: client.id, action: client.status === 'ACTIVE' ? 'deactivate' : 'activate' })} className="font-mono text-[11px] uppercase tracking-wide hover:underline" style={{ color: 'var(--status-pending)' }}>
                                                                 {client.status === 'ACTIVE' ? 'Inactive' : 'Active'}
                                                             </button>
                                                         </>
@@ -283,6 +286,15 @@ export default function ClientsPage() {
                     </button>
                 </form>
             </Drawer>
+            <ConfirmDialog
+                open={clientToggle !== null}
+                message={`Are you sure you want to ${clientToggle?.action ?? 'activate'} this client?`}
+                onCancel={() => setClientToggle(null)}
+                onConfirm={() => {
+                    if (clientToggle) toggleStatus(clientToggle.id);
+                    setClientToggle(null);
+                }}
+            />
         </div>
     );
 }

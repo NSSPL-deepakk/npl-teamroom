@@ -11,6 +11,7 @@ import { ConfirmDialog } from '../components/ConfirmDialog';
 import type { Role } from '../data/roles';
 
 type Ctx = { role: Role };
+type EmployeeToggle = { id: string; action: 'activate' | 'deactivate' } | null;
 
 const WORK_MODES: WorkMode[] = ['OFFICE', 'WFH', 'HYBRID'];
 const EMPLOYEE_ROLE_OPTIONS: Exclude<Role, 'SUPER_ADMIN'>[] = ['EMPLOYEE', 'MANAGER', 'HR'];
@@ -106,6 +107,7 @@ export default function EmployeesPage() {
 
   const { documents, addDocument, removeDocument } = useEmployeeDocuments(editingId);
   const [removeDocumentId, setRemoveDocumentId] = useState<string | null>(null);
+  const [employeeToggle, setEmployeeToggle] = useState<EmployeeToggle>(null);
   const [docName, setDocName] = useState('');
   const [docCategory, setDocCategory] = useState<DocumentCategory>('ID Proof');
   const DOC_CATEGORIES: DocumentCategory[] = ['ID Proof', 'Education', 'Bank Details', 'Certificate', 'Other'];
@@ -625,7 +627,7 @@ export default function EmployeesPage() {
                   Edit employee
                 </button>
                 <button
-                  onClick={() => toggleStatus(selectedEmployee.id)}
+                  onClick={() => setEmployeeToggle({ id: selectedEmployee.id, action: selectedEmployee.employment_status === 'ACTIVE' ? 'deactivate' : 'activate' })}
                   className="border px-3 py-2 text-sm font-medium"
                   style={{ borderColor: 'var(--line)', color: selectedEmployee.employment_status === 'ACTIVE' ? 'var(--status-absent)' : 'var(--status-present)', borderRadius: 'var(--radius-sm)' }}
                 >
@@ -637,6 +639,15 @@ export default function EmployeesPage() {
         )}
       </Drawer>
       <ConfirmDialog open={removeDocumentId !== null} message="Are you sure you want to remove this record?" onCancel={() => setRemoveDocumentId(null)} onConfirm={() => { if (removeDocumentId) removeDocument(removeDocumentId); setRemoveDocumentId(null); }} />
+      <ConfirmDialog
+        open={employeeToggle !== null}
+        message={`Are you sure you want to ${employeeToggle?.action ?? 'activate'} this employee?`}
+        onCancel={() => setEmployeeToggle(null)}
+        onConfirm={() => {
+          if (employeeToggle) toggleStatus(employeeToggle.id);
+          setEmployeeToggle(null);
+        }}
+      />
     </div>
   );
 }
