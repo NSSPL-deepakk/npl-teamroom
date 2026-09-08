@@ -1,20 +1,21 @@
 import { useMemo } from 'react';
 import { useEmployees } from '../data/employees';
 import { useDepartments } from '../data/departments';
-import { useAttendance, requiredHoursForMonth, totalHoursForMonth } from '../data/attendance';
+import { useAttendance, requiredHoursForEmployeeMonth, totalHoursForMonth } from '../data/attendance';
 import { useLeaveRequests, leaveDayCount } from '../data/leave';
+import { classifyDay, useHolidays } from '../data/holidays';
 import { StatCard, LedgerPanel } from '../components/Ledger';
 
 export default function ReportsPage() {
   const { employees } = useEmployees();
   const { departments } = useDepartments();
   const { records } = useAttendance();
+  const { holidays } = useHolidays();
   const { requests } = useLeaveRequests();
 
   const now = new Date();
   const year = now.getFullYear();
   const month = now.getMonth() + 1;
-  const required = requiredHoursForMonth(year, month);
 
   const activeCount = employees.filter((e) => e.employment_status === 'ACTIVE').length;
   const inactiveCount = employees.length - activeCount;
@@ -45,16 +46,30 @@ export default function ReportsPage() {
     return Object.entries(totals).sort((a, b) => b[1] - a[1]);
   }, [requests]);
 
+  const offDayWork = useMemo(() => {
+    let holidayHours = 0;
+    let weeklyOffHours = 0;
+    for (const record of records) {
+      if (!record.date.startsWith(`${year}-${String(month).padStart(2, '0')}`)) continue;
+      const hours = totalHoursForMonth([record], record.employee_id, year, month);
+      const classification = classifyDay(record.date, holidays);
+      if (classification === 'HOLIDAY') holidayHours += hours;
+      if (classification === 'WEEKLY_OFF') weeklyOffHours += hours;
+    }
+    return { holidayHours, weeklyOffHours };
+  }, [records, holidays, year, month]);
+
   // Attendance summary: employees who actually have attendance history this month.
   const attendanceRows = useMemo(() => {
     const withHistory = employees.filter((e) => records.some((r) => r.employee_id === e.id));
     return withHistory
       .map((e) => {
         const total = totalHoursForMonth(records, e.id, year, month);
-        return { employee: e, total, variance: Math.round((total - required) * 10) / 10 };
+        const required = requiredHoursForEmployeeMonth(records, e.id, year, month, holidays);
+        return { employee: e, total, required, variance: Math.round((total - required) * 10) / 10 };
       })
       .sort((a, b) => a.variance - b.variance);
-  }, [employees, records, year, month, required]);
+  }, [employees, records, year, month, holidays]);
 
   return (
     <div>
@@ -144,13 +159,13 @@ export default function ReportsPage() {
       </div>
 
       <div className="mt-6">
-        <LedgerPanel title={`Attendance summary — hours vs. required (${required}h this month)`}>
+        <LedgerPanel title="Attendance summary — hours vs. required this month">
           {attendanceRows.length === 0 ? (
             <p className="px-5 py-8 text-center text-sm" style={{ color: 'var(--text-muted)' }}>
               No attendance history recorded yet.
             </p>
           ) : (
-            attendanceRows.map(({ employee, total, variance }) => (
+            attendanceRows.map(({ employee, total, required, variance }) => (
               <div
                 key={employee.id}
                 className="flex items-center gap-4 border-b px-5 py-3 last:border-b-0"
@@ -171,6 +186,9 @@ export default function ReportsPage() {
                 <span className="font-mono text-xs" style={{ color: 'var(--text-secondary)' }}>
                   {total}h logged
                 </span>
+                <span className="font-mono text-xs" style={{ color: 'var(--text-muted)' }}>
+                  {required}h required
+                </span>
                 <span
                   className="font-mono w-16 text-right text-xs"
                   style={{ color: variance >= 0 ? 'var(--status-present)' : 'var(--status-absent)' }}
@@ -181,6 +199,15 @@ export default function ReportsPage() {
               </div>
             ))
           )}
+        </LedgerPanel>
+      </div>
+
+      <div className="mt-6 grid gap-6 lg:grid-cols-2">
+        <LedgerPanel title="Work performed on holidays">
+          <p className="px-5 py-5 text-2xl font-semibold" style={{ color: 'var(--accent-holiday)' }}>{offDayWork.holidayHours.toFixed(1)}h</p>
+        </LedgerPanel>
+        <LedgerPanel title="Work performed on weekly offs">
+          <p className="px-5 py-5 text-2xl font-semibold" style={{ color: 'var(--accent-structure)' }}>{offDayWork.weeklyOffHours.toFixed(1)}h</p>
         </LedgerPanel>
       </div>
     </div>

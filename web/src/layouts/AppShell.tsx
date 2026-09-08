@@ -4,10 +4,10 @@ import { ROLE_LABEL, type Role } from '../data/roles';
 import { useDepartments } from '../data/departments';
 import { useDesignations } from '../data/designations';
 import { useEmployees, type Gender } from '../data/employees';
-import { useAuth } from '../contexts/AuthContext';
+import { LOGGED_IN_ELSEWHERE_MESSAGE, useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { Drawer } from '../components/Drawer';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 const PROFILE_OVERRIDES_KEY = 'roster.profile-overrides';
 const GENDERS: Gender[] = ['Male', 'Female', 'Other', 'Prefer not to say'];
@@ -17,7 +17,7 @@ type ProfileOverrides = Partial<Record<Role, ProfileOverride>>;
 
 export default function AppShell() {
   const navigate = useNavigate();
-  const { profile, signOut: authSignOut } = useAuth();
+  const { activeSessionId, profile, session, signIn, signOut: authSignOut } = useAuth();
   const role: Role = profile?.role ?? 'EMPLOYEE';
   const { employees, updateEmployee } = useEmployees();
   const employee = useMemo(
@@ -45,6 +45,8 @@ export default function AppShell() {
   const [confirmNewPassword, setConfirmNewPassword] = useState('');
   const [passwordError, setPasswordError] = useState('');
   const [passwordSuccess, setPasswordSuccess] = useState(false);
+  const replacementRedirecting = useRef(false);
+  const [today, setToday] = useState(() => new Date());
 
   const override = profileOverrides[role] ?? {};
 
@@ -53,6 +55,20 @@ export default function AppShell() {
   const profileEmail = profileEmployee?.email ?? profile?.email ?? '—';
   const profileUsername = profileEmployee?.employee_code ?? profile?.email ?? '—';
   const profileInitials = profileNameDisplay.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase() || 'U';
+
+  useEffect(() => {
+    const nextMidnight = new Date();
+    nextMidnight.setHours(24, 0, 0, 0);
+    const timer = window.setTimeout(() => setToday(new Date()), nextMidnight.getTime() - Date.now());
+    return () => window.clearTimeout(timer);
+  }, [today]);
+
+  const todayLabel = today.toLocaleDateString('en-IN', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  });
 
   function openProfile() {
     setProfileName(profileNameDisplay);
@@ -96,10 +112,7 @@ export default function AppShell() {
       setPasswordError('Could not determine your account email.');
       return;
     }
-    const { error: reauthError } = await supabase.auth.signInWithPassword({
-      email: profile.email,
-      password: currentPassword,
-    });
+    const { error: reauthError } = await signIn(profile.email, currentPassword);
     if (reauthError) {
       setPasswordError('Current password is incorrect.');
       return;
@@ -147,11 +160,45 @@ export default function AppShell() {
   }
 
   // ProtectedRoute already guarantees a session exists before this mounts;
-  // nothing to redirect here.
-  useEffect(() => { }, []);
+  // the active-session watcher handles replacement from another login.
+  useEffect(() => {
+    const userId = session?.user.id;
+    const mySessionId = activeSessionId;
+    if (!userId || !mySessionId) return;
+
+    const channel = supabase
+      .channel(`session-watch-${userId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'active_sessions',
+          filter: `user_id=eq.${userId}`,
+        },
+        async (payload) => {
+          const newSessionId = String(payload.new.session_id);
+          const currentSessionId = sessionStorage.getItem('active_session_id');
+          if (newSessionId === currentSessionId || replacementRedirecting.current) return;
+
+          replacementRedirecting.current = true;
+          sessionStorage.removeItem('active_session_id');
+          await authSignOut('logged_in_elsewhere');
+          navigate('/login', {
+            replace: true,
+            state: { reason: 'logged_in_elsewhere', message: LOGGED_IN_ELSEWHERE_MESSAGE },
+          });
+        },
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [activeSessionId, authSignOut, navigate, session?.user.id]);
 
   async function signOut() {
-    await authSignOut();
+    await authSignOut('manual');
     navigate('/login');
   }
 
@@ -166,7 +213,7 @@ export default function AppShell() {
         >
           <div>
             <p className="font-mono text-[11px] uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>
-              Tuesday, 12 August 2026
+              {todayLabel}
             </p>
           </div>
 

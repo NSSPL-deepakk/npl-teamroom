@@ -3,6 +3,7 @@ import { useNavigate, useOutletContext } from 'react-router-dom';
 import {
   hasOpenSession,
   hoursBetween,
+  requiredHoursForEmployeeMonth,
   STANDARD_SHIFT_END,
   useAttendance,
   type AttendanceRecord,
@@ -10,7 +11,7 @@ import {
 import { useCurrentEmployee } from '../data/currentUser';
 import { useDepartments } from '../data/departments';
 import { useEmployees, type WorkMode } from '../data/employees';
-import { useHolidays } from '../data/holidays';
+import { classifyDay, useHolidays } from '../data/holidays';
 import { useLeaveRequests } from '../data/leave';
 import type { Role } from '../data/roles';
 import { ChevronRight } from 'lucide-react';
@@ -100,8 +101,6 @@ export default function AttendancePage() {
   const showEmployeeList = isHRAdmin && viewMode === 'employee' && !selectedEmployeeId;
   const targetEmployee = visibleEmployee ?? currentEmployee;
 
-  const holidaySet = useMemo(() => new Set(holidays.map((h) => h.date)), [holidays]);
-
   const targetSessions = useMemo(() => {
     if (!targetEmployee) return [] as AttendanceRecord[];
     return records.filter((record) => record.employee_id === targetEmployee.id).sort((a, b) => a.date.localeCompare(b.date));
@@ -124,11 +123,12 @@ export default function AttendancePage() {
       const isApprovedLeave = leaveRequests.some(
         (request) => request.employee_id === targetEmployee?.id && request.status === 'APPROVED' && iso >= request.start_date && iso <= request.end_date,
       );
-      const status = holidaySet.has(iso) ? 'holiday' : isApprovedLeave ? 'leave' : sessions.length > 0 ? 'present' : 'absent';
+      const classification = classifyDay(iso, holidays);
+      const status = classification === 'HOLIDAY' ? 'holiday' : classification === 'WEEKLY_OFF' ? 'weekly-off' : isApprovedLeave ? 'leave' : sessions.length > 0 ? 'present' : 'absent';
 
       return { iso, sessions, total: Number(total.toFixed(1)), status };
     }).sort((a, b) => a.iso.localeCompare(b.iso));
-  }, [year, month, targetEmployee, targetSessions, holidaySet, leaveRequests]);
+  }, [year, month, targetEmployee, targetSessions, holidays, leaveRequests]);
 
   const monthlyAttendanceRows = useMemo<Array<{ day: (typeof monthlyAttendance)[number]; session: AttendanceRecord | null }>>(
     () => monthlyAttendance.flatMap<{ day: (typeof monthlyAttendance)[number]; session: AttendanceRecord | null }>((day) => day.sessions.length > 0
@@ -176,14 +176,12 @@ export default function AttendancePage() {
     () =>
       filteredEmployees.map((emp) => {
         const logged = records.filter((r) => r.employee_id === emp.id && r.date.startsWith(`${year}-${String(month).padStart(2, '0')}`)).reduce((sum, r) => sum + (hoursBetween(r.check_in, r.check_out) ?? 0), 0);
-        const required = new Date(year, month, 0).getDate();
-        const workingDays = Array.from({ length: required }, (_, index) => new Date(year, month - 1, index + 1)).filter((date) => date.getDay() !== 0 && date.getDay() !== 6).length;
-        const requiredHours = workingDays * 9;
+        const requiredHours = requiredHoursForEmployeeMonth(records, emp.id, year, month, holidays);
         const variance = Number((logged - requiredHours).toFixed(1));
         const hasToday = records.some((r) => r.employee_id === emp.id && r.date === today);
         return { employee: emp, logged: Number(logged.toFixed(1)), required: requiredHours, variance, hasToday };
       }),
-    [filteredEmployees, records, year, month, today],
+    [filteredEmployees, records, year, month, today, holidays],
   );
 
   function handleCheckIn() {
@@ -268,16 +266,8 @@ export default function AttendancePage() {
   }, [targetEmployee, records, year, month, today]);
 
   const currentMonthRequired = useMemo(() => {
-    const today_date = new Date(today);
-    let workingDays = 0;
-    for (let d = 1; d <= today_date.getDate(); d += 1) {
-      const date = new Date(year, month - 1, d);
-      if (date.getDay() !== 0 && date.getDay() !== 6 && !holidaySet.has(date.toISOString().slice(0, 10))) {
-        workingDays += 1;
-      }
-    }
-    return workingDays * 9;
-  }, [year, month, holidaySet, today]);
+    return targetEmployee ? requiredHoursForEmployeeMonth(records, targetEmployee.id, year, month, holidays) : 0;
+  }, [targetEmployee, records, year, month, holidays]);
 
   const currentMonthVariance = currentMonthLogged - currentMonthRequired;
 
@@ -304,24 +294,21 @@ export default function AttendancePage() {
     const monthPrefix = `${year}-${String(month).padStart(2, '0')}`;
     const monthEnd = `${monthPrefix}-${String(new Date(year, month, 0).getDate()).padStart(2, '0')}`;
     const lastCompletedDate = monthPrefix === today.slice(0, 7) ? today : monthEnd < today ? monthEnd : `${monthPrefix}-00`;
-    const workingDays = Array.from({ length: new Date(year, month, 0).getDate() }, (_, index) => index + 1)
-      .map((day) => `${monthPrefix}-${String(day).padStart(2, '0')}`)
-      .filter((date) => date <= lastCompletedDate && new Date(`${date}T00:00:00`).getDay() !== 0 && new Date(`${date}T00:00:00`).getDay() !== 6 && !holidaySet.has(date));
-    const requiredMinutes = workingDays.length * 9 * 60;
-
     return employees
       .map((emp) => {
         const employeeRecords = records.filter((record) => record.employee_id === emp.id && record.date.startsWith(monthPrefix) && record.date <= lastCompletedDate);
         const workedMinutes = employeeRecords.reduce((sum, record) => sum + minutesBetween(record.check_in, record.check_out), 0);
+        const requiredMinutes = requiredHoursForEmployeeMonth(records, emp.id, year, month, holidays) * 60;
         const overtime = Math.max(0, workedMinutes - requiredMinutes);
         const shortfall = Math.max(0, requiredMinutes - workedMinutes);
         const todayRecords = records.filter((record) => record.employee_id === emp.id && record.date === today);
         const onLeave = leaveRequests.some((request) => request.employee_id === emp.id && request.status === 'APPROVED' && today >= request.start_date && today <= request.end_date);
-        const todayStatus = todayRecords.length > 0 ? 'PRESENT' : onLeave ? 'LEAVE' : today > lastCompletedDate && monthPrefix !== today.slice(0, 7) ? 'UPCOMING' : 'ABSENT';
+        const todayClassification = classifyDay(today, holidays);
+        const todayStatus = todayRecords.length > 0 ? 'PRESENT' : onLeave ? 'LEAVE' : todayClassification === 'HOLIDAY' ? 'HOLIDAY' : todayClassification === 'WEEKLY_OFF' ? 'WEEKLY OFF' : today > lastCompletedDate && monthPrefix !== today.slice(0, 7) ? 'UPCOMING' : 'ABSENT';
         const late = todayRecords.some((record) => record.check_in && record.check_in > '09:15');
         return { employee: emp, requiredMinutes, workedMinutes, overtime, shortfall, attendance: requiredMinutes ? Math.min(100, (workedMinutes / requiredMinutes) * 100) : 0, todayStatus, late };
       });
-  }, [employees, records, year, month, today, holidaySet, leaveRequests]);
+  }, [employees, records, year, month, today, holidays, leaveRequests]);
 
   const organizationRows = useMemo(() => organizationAllRows.filter((row) => {
     const search = searchTerm.trim().toLowerCase();

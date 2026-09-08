@@ -11,11 +11,8 @@ export function Sidebar({ role }: { role: Role }) {
     >
       <div>
         <div className="flex items-center gap-3 px-6 py-6">
-          <span
-            className="flex h-8 w-8 items-center justify-center text-sm font-bold"
-            style={{ background: 'var(--primary)', color: 'white', borderRadius: '2px' }}
-          >
-            R
+          <span className="flex h-12 w-24 shrink-0 items-center justify-center overflow-visible bg-[var(--ink)]">
+            <img src="/logo_nlp.png" alt="Roster HR" className="h-full w-full object-contain" />
           </span>
           <div className="flex flex-col">
             <span className="font-mono text-xs font-semibold tracking-[0.16em]" style={{ color: 'var(--text-on-ink)' }}>

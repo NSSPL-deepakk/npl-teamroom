@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { WorkMode } from './employees';
 import { supabase } from '../lib/supabase';
+import { classifyDay, type Holiday } from './holidays';
 
 export const STANDARD_HOURS_PER_DAY = 9;
 export const STANDARD_SHIFT_END = '18:00';
@@ -179,17 +180,34 @@ export function daySessionsForMonth(
   return result.filter((entry) => entry.date >= start.toISOString().slice(0, 10) && entry.date <= end.toISOString().slice(0, 10));
 }
 
-export function requiredHoursForMonth(year: number, month: number, hoursPerDay = STANDARD_HOURS_PER_DAY): number {
+export function requiredHoursForMonth(year: number, month: number, holidays: Pick<Holiday, 'date' | 'category'>[] = [], hoursPerDay = STANDARD_HOURS_PER_DAY): number {
   const now = new Date();
   const isCurrentMonth = now.getFullYear() === year && now.getMonth() + 1 === month;
   const lastDay = isCurrentMonth ? now.getDate() : new Date(year, month, 0).getDate();
 
   let weekdays = 0;
   for (let day = 1; day <= lastDay; day++) {
-    const dow = new Date(year, month - 1, day).getDay();
-    if (dow !== 0 && dow !== 6) weekdays++;
+    const date = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    if (classifyDay(date, holidays) === 'WORKING_DAY') weekdays++;
   }
   return weekdays * hoursPerDay;
+}
+
+export function requiredHoursForEmployeeMonth(
+  records: AttendanceRecord[],
+  employeeId: string,
+  year: number,
+  month: number,
+  holidays: Pick<Holiday, 'date' | 'category'>[] = [],
+  hoursPerDay = STANDARD_HOURS_PER_DAY,
+): number {
+  const baseline = requiredHoursForMonth(year, month, holidays, hoursPerDay);
+  const workedOffDays = new Set(
+    recordsForMonth(records, employeeId, year, month)
+      .filter((record) => classifyDay(record.date, holidays) !== 'WORKING_DAY' && Boolean(record.check_in))
+      .map((record) => record.date),
+  );
+  return baseline + workedOffDays.size * hoursPerDay;
 }
 
 export function hasOpenSession(records: AttendanceRecord[], employeeId: string, date = today()): AttendanceRecord | null {

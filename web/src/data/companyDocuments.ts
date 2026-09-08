@@ -16,6 +16,7 @@ export interface CompanyDocument {
   };
   uploaded_at: string;
   uploaded_by?: string | null;
+  is_visible_to_all: boolean;
 }
 
 const ACCEPTED_MIME_TYPES = new Set([
@@ -47,6 +48,7 @@ function normalizeDocument(row: any): CompanyDocument {
     storage_path: row.storage_path ?? undefined,
     uploaded_at: row.uploaded_at ? new Date(row.uploaded_at).toISOString().slice(0, 10) : '',
     uploaded_by: row.uploaded_by ?? null,
+    is_visible_to_all: row.is_visible_to_all !== false,
     file: {
       name: row.name,
       type: row.file_type ?? 'application/octet-stream',
@@ -112,7 +114,7 @@ export function useCompanyDocuments() {
     void refresh();
   }, [refresh]);
 
-  const addDocument = useCallback(async (payload: { name: string; category: CompanyDocCategory; description?: string; file?: File }) => {
+  const addDocument = useCallback(async (payload: { name: string; category: CompanyDocCategory; description?: string; file?: File; is_visible_to_all: boolean }) => {
     if (!payload.file) {
       throw new Error('Please select a PDF, DOCX, or XLSX file first.');
     }
@@ -143,6 +145,7 @@ export function useCompanyDocuments() {
         file_type: getFileExtension(payload.file.name),
         file_size_bytes: payload.file.size,
         uploaded_by: employeeId,
+        is_visible_to_all: payload.is_visible_to_all,
       })
       .select('*')
       .single();

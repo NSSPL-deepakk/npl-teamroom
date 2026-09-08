@@ -4,7 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import type { Role } from '../data/roles';
 
 export default function ProtectedRoute({ children }: { children: ReactNode }) {
-  const { session, loading } = useAuth();
+  const { session, profile, signOutReason, loading } = useAuth();
 
   if (loading) {
     return (
@@ -16,7 +16,10 @@ export default function ProtectedRoute({ children }: { children: ReactNode }) {
     );
   }
 
-  if (!session) return <Navigate to="/login" replace />;
+  if (!session || !profile) {
+    const reason = signOutReason === 'logged_in_elsewhere' ? 'logged_in_elsewhere' : signOutReason === 'manual' ? undefined : 'session_expired';
+    return <Navigate to="/login" replace state={reason ? { reason } : undefined} />;
+  }
 
   return <>{children}</>;
 }

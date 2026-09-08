@@ -14,6 +14,19 @@ export interface Holiday {
   image?: string | null;
 }
 
+export type DayClassification = 'WORKING_DAY' | 'WEEKLY_OFF' | 'HOLIDAY';
+
+export function isWeeklyOff(date: string): boolean {
+  const value = new Date(`${date}T00:00:00`);
+  if (value.getDay() === 0) return true;
+  return value.getDay() === 6 && Math.ceil(value.getDate() / 7) % 2 === 0;
+}
+
+export function classifyDay(date: string, holidays: Pick<Holiday, 'date' | 'category'>[]): DayClassification {
+  if (holidays.some((holiday) => holiday.date === date && REAL_HOLIDAY_CATEGORIES.includes(holiday.category))) return 'HOLIDAY';
+  return isWeeklyOff(date) ? 'WEEKLY_OFF' : 'WORKING_DAY';
+}
+
 export function countHolidaysThisYear(holidays: Holiday[], year = new Date().getFullYear()): number {
   return holidays.filter((holiday) => {
     return holiday.date.startsWith(`${year}-`) && REAL_HOLIDAY_CATEGORIES.includes(holiday.category);

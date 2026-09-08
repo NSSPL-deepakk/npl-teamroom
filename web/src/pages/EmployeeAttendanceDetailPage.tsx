@@ -3,7 +3,7 @@ import { useNavigate, useOutletContext, useParams, useSearchParams } from 'react
 import {
     daySessionsForMonth,
     hoursBetween,
-    requiredHoursForMonth,
+    requiredHoursForEmployeeMonth,
     STANDARD_SHIFT_END,
     STANDARD_HOURS_PER_DAY,
     totalHoursForMonth,
@@ -11,7 +11,7 @@ import {
     type AttendanceRecord,
 } from '../data/attendance';
 import { useEmployees, type WorkMode } from '../data/employees';
-import { useHolidays } from '../data/holidays';
+import { classifyDay, useHolidays } from '../data/holidays';
 import { useLeaveRequests } from '../data/leave';
 import type { Role } from '../data/roles';
 import { ConfirmDialog } from '../components/ConfirmDialog';
@@ -81,7 +81,7 @@ export default function EmployeeAttendanceDetailPage() {
         return daySessionsForMonth(records, employee.id, year, month);
     }, [employee, records, year, month]);
 
-    const required = requiredHoursForMonth(year, month, STANDARD_HOURS_PER_DAY);
+    const required = employee ? requiredHoursForEmployeeMonth(records, employee.id, year, month, holidays, STANDARD_HOURS_PER_DAY) : 0;
     const logged = employee ? totalHoursForMonth(records, employee.id, year, month) : 0;
     const variance = Math.round((logged - required) * 10) / 10;
 
@@ -94,29 +94,27 @@ export default function EmployeeAttendanceDetailPage() {
             const sessions = records.filter((record) => record.employee_id === employee.id && record.date === date).sort((a, b) => (a.check_in ?? '').localeCompare(b.check_in ?? ''));
             const total = sessions.reduce((sum, session) => sum + sessionMinutes(session), 0);
             const isFuture = date > today;
-            const isHoliday = holidays.some((holiday) => holiday.date === date);
+            const classification = classifyDay(date, holidays);
             const isLeave = leaveRequests.some((request) => request.employee_id === employee.id && request.status === 'APPROVED' && date >= request.start_date && date <= request.end_date);
-            const isWeekend = [0, 6].includes(new Date(`${date}T00:00:00`).getDay());
             const hasPunch = sessions.some((session) => session.check_in || session.check_out);
             const manualSessions = sessions.filter((session) => session.is_manual_entry);
             const earlySessions = sessions.filter((session) => session.is_early_checkout);
             const overtimeSession = sessions.find((session) => session.overtime_minutes > 0);
-            const status = isFuture ? 'UPCOMING' : isHoliday ? 'HOLIDAY' : isLeave ? 'LEAVE' : hasPunch ? 'PRESENT' : isWeekend ? 'WEEKEND' : 'ABSENT';
+            const status = isFuture ? 'UPCOMING' : classification === 'HOLIDAY' ? (hasPunch ? 'HOLIDAY WORKED' : 'HOLIDAY') : classification === 'WEEKLY_OFF' ? (hasPunch ? 'WEEKLY OFF WORKED' : 'WEEKLY OFF') : isLeave ? 'LEAVE' : hasPunch ? 'PRESENT' : 'ABSENT';
             return { date, sessions, total, status, overtime: Math.max(0, total - 9 * 60), hasManualEntry: manualSessions.length > 0, hasEarlyCheckout: earlySessions.length > 0, manualReason: manualSessions.find((session) => session.manual_entry_reason)?.manual_entry_reason ?? null, earlyCheckoutReason: earlySessions.find((session) => session.early_checkout_reason)?.early_checkout_reason ?? null, overtimeReason: overtimeSession?.overtime_reason ?? null };
         }).sort((a, b) => a.date.localeCompare(b.date));
     }, [employee, records, year, month, holidays, leaveRequests, today]);
 
     const superAdminSummary = useMemo(() => {
         const completed = superAdminDays.filter((day) => day.date <= today);
-        const requiredDays = completed.filter((day) => day.status !== 'HOLIDAY' && day.status !== 'WEEKEND').length;
-        const requiredMinutes = requiredDays * 9 * 60;
+        const requiredMinutes = required * 60;
         const workedMinutes = completed.reduce((sum, day) => sum + day.total, 0);
-        const presentDays = completed.filter((day) => day.status === 'PRESENT').length;
+        const presentDays = completed.filter((day) => day.status === 'PRESENT' || day.status.endsWith('WORKED')).length;
         const absentDays = completed.filter((day) => day.status === 'ABSENT').length;
         const leaveDays = completed.filter((day) => day.status === 'LEAVE').length;
         const wfhDays = completed.filter((day) => day.sessions.some((session) => session.work_mode === 'WFH')).length;
-        return { requiredMinutes, workedMinutes, overtime: Math.max(0, workedMinutes - requiredMinutes), shortfall: Math.max(0, requiredMinutes - workedMinutes), attendance: requiredDays ? Math.min(100, (presentDays / requiredDays) * 100) : 0, presentDays, absentDays, leaveDays, wfhDays };
-    }, [superAdminDays, today]);
+        return { requiredMinutes, workedMinutes, overtime: Math.max(0, workedMinutes - requiredMinutes), shortfall: Math.max(0, requiredMinutes - workedMinutes), attendance: requiredMinutes ? Math.min(100, (presentDays / (requiredMinutes / (9 * 60))) * 100) : 0, presentDays, absentDays, leaveDays, wfhDays };
+    }, [superAdminDays, today, required]);
 
     const selectedSuperDay = superAdminDays.find((day) => day.date === selectedDate) ?? superAdminDays[0];
     const superAdminRows = superAdminDays.flatMap<{ day: (typeof superAdminDays)[number]; session: AttendanceRecord | null }>((day) => day.sessions.length > 0 ? day.sessions.map((session) => ({ day, session })) : [{ day, session: null }]);
@@ -262,9 +260,12 @@ export default function EmployeeAttendanceDetailPage() {
         const monthDays = sessionsByDay.filter((day) => day.date.startsWith(monthPrefix));
         const holidaysInMonth = holidays.filter((holiday) => holiday.date.startsWith(monthPrefix));
         const holidayDates = new Set(holidaysInMonth.map((holiday) => holiday.date));
-        const presentDays = monthDays.filter((day) => day.sessions.length > 0 && !holidayDates.has(day.date)).length;
-        const absentDays = monthDays.filter((day) => day.sessions.length === 0 && !holidayDates.has(day.date)).length;
-        return { presentDays, absentDays, holidays: holidaysInMonth.length, totalHours: logged };
+        const weeklyOffDays = monthDays.filter((day) => classifyDay(day.date, holidays) === 'WEEKLY_OFF').length;
+        const presentDays = monthDays.filter((day) => day.sessions.length > 0 && !holidayDates.has(day.date) && classifyDay(day.date, holidays) !== 'WEEKLY_OFF').length;
+        const absentDays = monthDays.filter((day) => day.sessions.length === 0 && classifyDay(day.date, holidays) === 'WORKING_DAY').length;
+        const holidayWorkedDays = monthDays.filter((day) => day.sessions.length > 0 && classifyDay(day.date, holidays) === 'HOLIDAY').length;
+        const weeklyOffWorkedDays = monthDays.filter((day) => day.sessions.length > 0 && classifyDay(day.date, holidays) === 'WEEKLY_OFF').length;
+        return { presentDays, absentDays, holidays: holidaysInMonth.length, weeklyOffDays, holidayWorkedDays, weeklyOffWorkedDays, totalHours: logged };
     }, [year, month, sessionsByDay, holidays, logged]);
 
     function changeMonth(delta: number) {
@@ -331,6 +332,21 @@ export default function EmployeeAttendanceDetailPage() {
                         <p className="mt-2 text-2xl font-semibold" style={{ color: variance < 0 ? '#B91C1C' : '#166534' }}>
                             {variance >= 0 ? '+' : ''}{variance.toFixed(1)}h
                         </p>
+                    </div>
+                </div>
+
+                <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                    <div className="border px-4 py-3" style={{ borderColor: 'var(--line-soft)', borderRadius: 'var(--radius-sm)' }}>
+                        <p className="font-mono text-[10px] uppercase tracking-wide" style={{ color: 'var(--text-secondary)' }}>Holiday worked</p>
+                        <p className="mt-1 text-sm font-semibold" style={{ color: 'var(--accent-holiday)' }}>{monthSummary.holidayWorkedDays} days</p>
+                    </div>
+                    <div className="border px-4 py-3" style={{ borderColor: 'var(--line-soft)', borderRadius: 'var(--radius-sm)' }}>
+                        <p className="font-mono text-[10px] uppercase tracking-wide" style={{ color: 'var(--text-secondary)' }}>Weekly off worked</p>
+                        <p className="mt-1 text-sm font-semibold" style={{ color: 'var(--accent-structure)' }}>{monthSummary.weeklyOffWorkedDays} days</p>
+                    </div>
+                    <div className="border px-4 py-3" style={{ borderColor: 'var(--line-soft)', borderRadius: 'var(--radius-sm)' }}>
+                        <p className="font-mono text-[10px] uppercase tracking-wide" style={{ color: 'var(--text-secondary)' }}>Weekly offs</p>
+                        <p className="mt-1 text-sm font-semibold" style={{ color: 'var(--text-secondary)' }}>{monthSummary.weeklyOffDays} days</p>
                     </div>
                 </div>
             </div>

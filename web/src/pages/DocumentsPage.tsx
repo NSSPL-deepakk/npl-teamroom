@@ -20,6 +20,7 @@ export default function DocumentsPage() {
   const [name, setName] = useState('');
   const [category, setCategory] = useState<CompanyDocCategory>('Policy');
   const [description, setDescription] = useState('');
+  const [isVisibleToAll, setIsVisibleToAll] = useState(true);
   const [filter, setFilter] = useState<'ALL' | CompanyDocCategory>('ALL');
   const [dragActive, setDragActive] = useState(false);
   const [selectedDocumentId, setSelectedDocumentId] = useState<string | null>(null);
@@ -87,11 +88,13 @@ export default function DocumentsPage() {
         name: name.trim(),
         category,
         description: description.trim() || undefined,
+        is_visible_to_all: isVisibleToAll,
         file,
       });
       setName('');
       setCategory('Policy');
       setDescription('');
+      setIsVisibleToAll(true);
       setFile(null);
       setShowModal(false);
     } catch (err) {
@@ -121,6 +124,7 @@ export default function DocumentsPage() {
     setName('');
     setCategory('Policy');
     setDescription('');
+    setIsVisibleToAll(true);
     setFile(null);
     setUploadError(null);
     setShowModal(false);
@@ -189,6 +193,11 @@ export default function DocumentsPage() {
                     <p className="mt-1 line-clamp-2 text-xs" style={{ color: 'var(--text-secondary)' }}>
                       {d.description}
                     </p>
+                  )}
+                  {canManage && !d.is_visible_to_all && (
+                    <span className="mt-1 inline-flex px-1.5 py-0.5 font-mono text-[10px] uppercase" style={{ background: 'var(--status-neutral-bg)', color: 'var(--text-secondary)', borderRadius: 'var(--radius-sm)' }}>
+                      Restricted / HR Only
+                    </span>
                   )}
                   <div className="mt-2 flex items-center gap-2 text-xs" style={{ color: 'var(--text-muted)' }}>
                     <p>{d.uploaded_at}</p>
@@ -376,6 +385,16 @@ export default function DocumentsPage() {
                     </option>
                   ))}
                 </select>
+              </label>
+
+              <label className="flex items-center gap-2 text-sm" style={{ color: 'var(--ink)' }}>
+                <input
+                  type="checkbox"
+                  checked={isVisibleToAll}
+                  onChange={(event) => setIsVisibleToAll(event.target.checked)}
+                  className="h-4 w-4"
+                />
+                <span>Visible to all employees</span>
               </label>
 
               <label className="block">

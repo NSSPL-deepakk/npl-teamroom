@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { hoursBetween, recordsForMonth, requiredHoursForMonth, totalHoursForMonth, type AttendanceRecord } from '../data/attendance';
+import { hoursBetween, recordsForMonth, requiredHoursForEmployeeMonth, totalHoursForMonth, type AttendanceRecord } from '../data/attendance';
+import { useHolidays } from '../data/holidays';
 
 const MONTH_NAMES = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -14,10 +15,11 @@ export function MonthlyTimesheet({ employeeId, records }: { employeeId: string; 
   const now = new Date();
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth() + 1); // 1-12
+  const { holidays } = useHolidays();
 
   const monthRecords = recordsForMonth(records, employeeId, year, month);
   const total = totalHoursForMonth(records, employeeId, year, month);
-  const required = requiredHoursForMonth(year, month);
+  const required = requiredHoursForEmployeeMonth(records, employeeId, year, month, holidays);
   const variance = Math.round((total - required) * 10) / 10;
 
   function shiftMonth(delta: number) {
