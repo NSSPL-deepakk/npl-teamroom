@@ -63,7 +63,7 @@ export default function LoginPage() {
             Sign in
           </p>
           <h1 className="font-display mt-2 text-4xl font-semibold" style={{ color: 'var(--ink)' }}>
-            Welcome back.
+            Welcome back1.
           </h1>
           <p className="mt-2 text-sm" style={{ color: 'var(--text-secondary)' }}>
             Enter your workspace credentials to continue.
