@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { useEmployees } from '../data/employees';
 import { useDepartments } from '../data/departments';
 import { useAttendance, requiredHoursForEmployeeMonth, totalHoursForMonth } from '../data/attendance';
-import { classifyDay, useHolidays } from '../data/holidays';
+import { useHolidays } from '../data/holidays';
 import { StatCard, LedgerPanel } from '../components/Ledger';
 
 export default function ReportsPage() {
@@ -26,19 +26,6 @@ export default function ReportsPage() {
         .sort((a, b) => b.count - a.count),
     [departments, employees],
   );
-
-  const offDayWork = useMemo(() => {
-    let holidayHours = 0;
-    let weeklyOffHours = 0;
-    for (const record of records) {
-      if (!record.date.startsWith(`${year}-${String(month).padStart(2, '0')}`)) continue;
-      const hours = totalHoursForMonth([record], record.employee_id, year, month);
-      const classification = classifyDay(record.date, holidays);
-      if (classification === 'HOLIDAY') holidayHours += hours;
-      if (classification === 'WEEKLY_OFF') weeklyOffHours += hours;
-    }
-    return { holidayHours, weeklyOffHours };
-  }, [records, holidays, year, month]);
 
   // Attendance summary: employees who actually have attendance history this month.
   const attendanceRows = useMemo(() => {
@@ -133,15 +120,6 @@ export default function ReportsPage() {
               </div>
             ))
           )}
-        </LedgerPanel>
-      </div>
-
-      <div className="mt-6 grid gap-6 lg:grid-cols-2">
-        <LedgerPanel title="Work performed on holidays">
-          <p className="px-5 py-5 text-2xl font-semibold" style={{ color: 'var(--accent-holiday)' }}>{offDayWork.holidayHours.toFixed(1)}h</p>
-        </LedgerPanel>
-        <LedgerPanel title="Work performed on weekly offs">
-          <p className="px-5 py-5 text-2xl font-semibold" style={{ color: 'var(--accent-structure)' }}>{offDayWork.weeklyOffHours.toFixed(1)}h</p>
         </LedgerPanel>
       </div>
     </div>

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
+import { notifyAnnouncementCreated } from '../lib/notifications';
 import type { Employee } from './employees';
 
 export type HolidayCategory = 'National Holiday' | 'Optional Holiday' | 'Company Holiday' | 'Announcement';
@@ -203,6 +204,7 @@ export function useHolidays() {
       return;
     }
     setHolidays((prev) => [...prev, data as Holiday].sort((a, b) => a.date.localeCompare(b.date)));
+    if (data.category === 'Announcement') notifyAnnouncementCreated(data.id);
   }, []);
 
   const updateHoliday = useCallback(async (id: string, changes: Partial<Omit<Holiday, 'id'>>) => {

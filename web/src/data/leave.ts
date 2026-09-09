@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
+import { notifyLeaveRequestSubmitted } from '../lib/notifications';
 
 export type LeaveType = 'Casual' | 'Sick' | 'Annual' | 'Other';
 export type LeaveStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
@@ -64,6 +65,7 @@ export function useLeaveRequests() {
         return error.message;
       }
       setRequests((prev) => [data as LeaveRequest, ...prev]);
+      notifyLeaveRequestSubmitted((data as LeaveRequest).id);
       return null;
     },
     [],
