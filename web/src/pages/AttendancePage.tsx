@@ -3,8 +3,9 @@ import { useNavigate, useOutletContext } from 'react-router-dom';
 import {
   hasOpenSession,
   hoursBetween,
+  EARLY_CHECKOUT_THRESHOLD_MINUTES,
+  OVERTIME_THRESHOLD_MINUTES,
   requiredHoursForEmployeeMonth,
-  STANDARD_SHIFT_END,
   useAttendance,
   type AttendanceRecord,
 } from '../data/attendance';
@@ -71,6 +72,7 @@ export default function AttendancePage() {
     check_out: '18:00',
     work_mode: 'OFFICE' as WorkMode,
     manual_entry_reason: '',
+    work_summary: '',
     early_checkout_reason: '',
     overtime_reason: '',
   });
@@ -199,16 +201,18 @@ export default function AttendancePage() {
   function handleManualSave(event: React.FormEvent) {
     event.preventDefault();
     if (!targetEmployee) return;
-    if (!manualForm.date || !manualForm.check_in || !manualForm.check_out || !manualForm.manual_entry_reason.trim()) return;
-    const overtimeMinutes = Math.max(0, Math.round((hoursBetween(manualForm.check_in, manualForm.check_out) ?? 0) * 60) - 9 * 60);
-    if (manualForm.check_out < STANDARD_SHIFT_END && !manualForm.early_checkout_reason.trim()) return;
-    if ((overtimeMinutes > 0 || holidays.some((holiday) => holiday.date === manualForm.date)) && !manualForm.overtime_reason.trim()) return;
+    if (!manualForm.date || !manualForm.check_in || !manualForm.check_out || !manualForm.manual_entry_reason.trim() || !manualForm.work_summary.trim()) return;
+    const workedMinutes = Math.round((hoursBetween(manualForm.check_in, manualForm.check_out) ?? 0) * 60);
+    const overtimeMinutes = Math.max(0, workedMinutes - OVERTIME_THRESHOLD_MINUTES);
+    if (workedMinutes < EARLY_CHECKOUT_THRESHOLD_MINUTES && !manualForm.early_checkout_reason.trim()) return;
+    if (overtimeMinutes > 0 && !manualForm.overtime_reason.trim()) return;
     const saved = addManualEntry(targetEmployee.id, {
       date: manualForm.date,
       check_in: manualForm.check_in,
       check_out: manualForm.check_out,
       work_mode: manualForm.work_mode,
       manual_entry_reason: manualForm.manual_entry_reason,
+      work_summary: manualForm.work_summary,
       early_checkout_reason: manualForm.early_checkout_reason,
       overtime_reason: manualForm.overtime_reason,
       is_overtime: holidays.some((holiday) => holiday.date === manualForm.date),
@@ -903,9 +907,9 @@ export default function AttendancePage() {
                       className="w-full border px-3 py-2 text-sm"
                       style={{ borderColor: 'var(--line)', borderRadius: 'var(--radius-sm)' }}
                     />
-                    <input value={workDoneToday} onChange={(e) => setWorkDoneToday(e.target.value)} placeholder="What did you work on today?" className="w-full border px-3 py-2 text-sm" style={{ borderColor: 'var(--line)', borderRadius: 'var(--radius-sm)' }} />
-                    {manualForm.check_out < STANDARD_SHIFT_END && <input required value={manualForm.early_checkout_reason} onChange={(e) => setManualForm((prev) => ({ ...prev, early_checkout_reason: e.target.value }))} placeholder="Early checkout reason" className="w-full border px-3 py-2 text-sm" style={{ borderColor: 'var(--line)', borderRadius: 'var(--radius-sm)' }} />}
-                    {(Math.max(0, Math.round((hoursBetween(manualForm.check_in, manualForm.check_out) ?? 0) * 60) - 9 * 60) > 0 || holidays.some((holiday) => holiday.date === manualForm.date)) && <input required value={manualForm.overtime_reason} onChange={(e) => setManualForm((prev) => ({ ...prev, overtime_reason: e.target.value }))} placeholder="Overtime reason" className="w-full border px-3 py-2 text-sm" style={{ borderColor: 'var(--line)', borderRadius: 'var(--radius-sm)' }} />}
+                    <textarea required value={manualForm.work_summary} onChange={(e) => setManualForm((prev) => ({ ...prev, work_summary: e.target.value }))} placeholder="What did they work on this day?" rows={2} className="w-full border px-3 py-2 text-sm" style={{ borderColor: 'var(--line)', borderRadius: 'var(--radius-sm)' }} />
+                    {Math.round((hoursBetween(manualForm.check_in, manualForm.check_out) ?? 0) * 60) < EARLY_CHECKOUT_THRESHOLD_MINUTES && <input required value={manualForm.early_checkout_reason} onChange={(e) => setManualForm((prev) => ({ ...prev, early_checkout_reason: e.target.value }))} placeholder="Early checkout reason" className="w-full border px-3 py-2 text-sm" style={{ borderColor: 'var(--line)', borderRadius: 'var(--radius-sm)' }} />}
+                    {(Math.round((hoursBetween(manualForm.check_in, manualForm.check_out) ?? 0) * 60) > OVERTIME_THRESHOLD_MINUTES) && <input required value={manualForm.overtime_reason} onChange={(e) => setManualForm((prev) => ({ ...prev, overtime_reason: e.target.value }))} placeholder="Overtime reason" className="w-full border px-3 py-2 text-sm" style={{ borderColor: 'var(--line)', borderRadius: 'var(--radius-sm)' }} />}
                     <button type="submit" className="w-full px-3 py-2 text-sm font-medium" style={{ background: 'var(--ink)', color: '#fff', borderRadius: 'var(--radius-sm)' }}>
                       Save entry
                     </button>

@@ -5,6 +5,8 @@ import { classifyDay, type Holiday } from './holidays';
 
 export const STANDARD_HOURS_PER_DAY = 9;
 export const STANDARD_SHIFT_END = '18:00';
+export const EARLY_CHECKOUT_THRESHOLD_MINUTES = 510;
+export const OVERTIME_THRESHOLD_MINUTES = 545;
 
 export type OvertimeApprovalStatus = 'approved' | 'pending' | 'rejected';
 
@@ -35,6 +37,7 @@ export interface AttendanceRecord {
   approved_at: string | null;
   rejected_by: string | null;
   rejected_at: string | null;
+  work_summary: string | null;
   work_done_today: string | null;
   is_overtime: boolean;
   updated_at: string | null;
@@ -61,12 +64,11 @@ function minutesFromTime(time: string | null): number | null {
 }
 
 function normalizeRecord(record: Partial<AttendanceRecord>): AttendanceRecord {
-  const checkOutMinutes = minutesFromTime(record.check_out ?? null);
   const workedMinutes = record.check_in && record.check_out
     ? Math.max(0, (minutesFromTime(record.check_out) ?? 0) - (minutesFromTime(record.check_in) ?? 0))
     : 0;
-  const early = checkOutMinutes !== null && checkOutMinutes < minutesFromTime(STANDARD_SHIFT_END)!;
-  const overtime = record.overtime_minutes ?? Math.max(0, workedMinutes - STANDARD_HOURS_PER_DAY * 60);
+  const early = workedMinutes < EARLY_CHECKOUT_THRESHOLD_MINUTES;
+  const overtime = record.overtime_minutes ?? Math.max(0, workedMinutes - OVERTIME_THRESHOLD_MINUTES);
   return {
     id: record.id ?? crypto.randomUUID(),
     employee_id: record.employee_id ?? '',
@@ -94,6 +96,7 @@ function normalizeRecord(record: Partial<AttendanceRecord>): AttendanceRecord {
     approved_at: record.approved_at ?? null,
     rejected_by: record.rejected_by ?? null,
     rejected_at: record.rejected_at ?? null,
+    work_summary: record.work_summary ?? null,
     work_done_today: record.work_done_today ?? null,
     is_overtime: record.is_overtime ?? overtime > 0,
     updated_at: record.updated_at ?? null,
@@ -102,8 +105,9 @@ function normalizeRecord(record: Partial<AttendanceRecord>): AttendanceRecord {
   };
 }
 
-function validateRecord(record: Pick<AttendanceRecord, 'is_manual_entry' | 'manual_entry_reason' | 'is_early_checkout' | 'early_checkout_reason' | 'overtime_minutes' | 'overtime_reason'>): boolean {
+function validateRecord(record: Pick<AttendanceRecord, 'is_manual_entry' | 'manual_entry_reason' | 'is_early_checkout' | 'early_checkout_reason' | 'overtime_minutes' | 'overtime_reason' | 'work_summary'>): boolean {
   return (!record.is_manual_entry || Boolean(record.manual_entry_reason?.trim()))
+    && (!record.is_manual_entry || Boolean(record.work_summary?.trim()))
     && (!record.is_early_checkout || Boolean(record.early_checkout_reason?.trim()))
     && (record.overtime_minutes <= 0 || Boolean(record.overtime_reason?.trim()));
 }
@@ -112,9 +116,9 @@ function deriveMetadata(checkIn: string | null, checkOut: string | null, overrid
   const inMinutes = minutesFromTime(checkIn);
   const outMinutes = minutesFromTime(checkOut);
   const workedMinutes = inMinutes !== null && outMinutes !== null ? Math.max(0, outMinutes - inMinutes) : 0;
-  const overtimeMinutes = Math.max(0, workedMinutes - STANDARD_HOURS_PER_DAY * 60);
+  const overtimeMinutes = Math.max(0, workedMinutes - OVERTIME_THRESHOLD_MINUTES);
   return {
-    is_early_checkout: outMinutes !== null && outMinutes < minutesFromTime(STANDARD_SHIFT_END)!,
+    is_early_checkout: workedMinutes < EARLY_CHECKOUT_THRESHOLD_MINUTES,
     overtime_minutes: overrides.overtime_minutes ?? overtimeMinutes,
     overtime_approval_status: (overrides.overtime_minutes ?? overtimeMinutes) > 0 ? (overrides.overtime_approval_status ?? 'pending') : null,
   };
@@ -282,18 +286,17 @@ export function useAttendance() {
   }, [records]);
 
   const addManualEntry = useCallback(
-    (employeeId: string, draft: { date: string; check_in: string; check_out: string; work_mode: WorkMode; manual_entry_reason: string; early_checkout_reason?: string; overtime_reason?: string; is_overtime?: boolean; work_done_today?: string }) => {
+    (employeeId: string, draft: { date: string; check_in: string; check_out: string; work_mode: WorkMode; manual_entry_reason: string; work_summary: string; early_checkout_reason?: string; overtime_reason?: string; is_overtime?: boolean; work_done_today?: string }) => {
       if (draft.date > today()) return false;
       const metadata = deriveMetadata(draft.check_in, draft.check_out);
       const record = normalizeRecord({
         employee_id: employeeId, date: draft.date, check_in: draft.check_in, check_out: draft.check_out,
         latitude: null, longitude: null, work_mode: draft.work_mode, status: 'PRESENT', is_manual_entry: true,
-        manual_entry_reason: draft.manual_entry_reason, early_checkout_reason: draft.early_checkout_reason ?? null,
+        manual_entry_reason: draft.manual_entry_reason, work_summary: draft.work_summary, early_checkout_reason: draft.early_checkout_reason ?? null,
         overtime_reason: draft.overtime_reason ?? null, ...metadata,
       });
       if (draft.is_overtime && record.check_in && record.check_out) {
         record.is_overtime = true;
-        record.overtime_minutes = Math.max(0, (minutesFromTime(record.check_out) ?? 0) - (minutesFromTime(record.check_in) ?? 0));
         record.overtime_approval_status = 'pending';
       }
       if (!validateRecord(record)) return false;
@@ -305,6 +308,7 @@ export function useAttendance() {
           original_check_in: record.check_in, original_check_out: record.check_out,
           latitude: record.latitude, longitude: record.longitude, work_mode: record.work_mode, status: record.status,
           is_manual_entry: record.is_manual_entry, manual_entry_reason: record.manual_entry_reason,
+          work_summary: record.work_summary,
           is_early_checkout: record.is_early_checkout, early_checkout_reason: record.early_checkout_reason,
           overtime_minutes: record.overtime_minutes, overtime_reason: record.overtime_reason,
           overtime_approval_status: record.overtime_approval_status, overtime_approved_by: record.overtime_approved_by,
