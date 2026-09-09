@@ -1,6 +1,10 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
-import { useCompanyDocuments, type CompanyDocCategory } from '../data/companyDocuments';
+import { useCompanyDocuments, type CompanyDocCategory, type CompanyDocVisibility } from '../data/companyDocuments';
+import { useEmployees } from '../data/employees';
+import { useDepartments } from '../data/departments';
+import { useDesignations } from '../data/designations';
+import { supabase } from '../lib/supabase';
 import { Drawer } from '../components/Drawer';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import type { Role } from '../data/roles';
@@ -14,21 +18,49 @@ export default function DocumentsPage() {
   const { role } = useOutletContext<Ctx>();
   const canManage = role === 'SUPER_ADMIN' || role === 'HR';
   const { documents, loading, error, addDocument, removeDocument, openDocument } = useCompanyDocuments();
+  const { employees } = useEmployees();
+  const { departments } = useDepartments();
+  const { designations } = useDesignations();
 
   const [showModal, setShowModal] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [name, setName] = useState('');
   const [category, setCategory] = useState<CompanyDocCategory>('Policy');
   const [description, setDescription] = useState('');
-  const [isVisibleToAll, setIsVisibleToAll] = useState(true);
+  const [visibility, setVisibility] = useState<CompanyDocVisibility>('ALL');
+  const [selectedEmployeeIds, setSelectedEmployeeIds] = useState<string[]>([]);
+  const [employeeSearch, setEmployeeSearch] = useState('');
   const [filter, setFilter] = useState<'ALL' | CompanyDocCategory>('ALL');
   const [dragActive, setDragActive] = useState(false);
   const [selectedDocumentId, setSelectedDocumentId] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [removeId, setRemoveId] = useState<string | null>(null);
+  const [managerEmployeeIds, setManagerEmployeeIds] = useState<string[]>([]);
 
   const filtered = filter === 'ALL' ? documents : documents.filter((d) => d.category === filter);
   const selectedDocument = documents.find((document) => document.id === selectedDocumentId) ?? null;
+
+  useEffect(() => {
+    if (selectedDocument?.visibility !== 'MANAGER_ONLY') return;
+    async function loadManagers() {
+      const { data } = await supabase.from('profiles').select('employee_id').eq('role', 'MANAGER').not('employee_id', 'is', null);
+      setManagerEmployeeIds((data ?? []).map((profile) => profile.employee_id).filter((id): id is string => Boolean(id)));
+    }
+    void loadManagers();
+  }, [selectedDocument]);
+
+  const documentViewers = useMemo(() => {
+    if (!selectedDocument) return [];
+    const ids = selectedDocument.visibility === 'SELECTED_EMPLOYEES'
+      ? selectedDocument.visible_employee_ids
+      : selectedDocument.visibility === 'MANAGER_ONLY'
+        ? managerEmployeeIds
+        : employees.map((employee) => employee.id);
+    const uniqueIds = [...new Set(ids)];
+    return uniqueIds
+      .map((id) => employees.find((employee) => employee.id === id))
+      .filter((employee): employee is (typeof employees)[number] => Boolean(employee));
+  }, [employees, managerEmployeeIds, selectedDocument]);
 
   function handleDrag(e: React.DragEvent) {
     e.preventDefault();
@@ -82,19 +114,26 @@ export default function DocumentsPage() {
       setUploadError('Please select a PDF, DOCX, or XLSX file.');
       return;
     }
+    if (visibility === 'SELECTED_EMPLOYEES' && selectedEmployeeIds.length === 0) {
+      setUploadError('Select at least one employee for this visibility option.');
+      return;
+    }
 
     try {
       await addDocument({
         name: name.trim(),
         category,
         description: description.trim() || undefined,
-        is_visible_to_all: isVisibleToAll,
+        visibility,
+        visible_employee_ids: visibility === 'SELECTED_EMPLOYEES' ? selectedEmployeeIds : [],
         file,
       });
       setName('');
       setCategory('Policy');
       setDescription('');
-      setIsVisibleToAll(true);
+      setVisibility('ALL');
+      setSelectedEmployeeIds([]);
+      setEmployeeSearch('');
       setFile(null);
       setShowModal(false);
     } catch (err) {
@@ -124,10 +163,18 @@ export default function DocumentsPage() {
     setName('');
     setCategory('Policy');
     setDescription('');
-    setIsVisibleToAll(true);
+    setVisibility('ALL');
+    setSelectedEmployeeIds([]);
+    setEmployeeSearch('');
     setFile(null);
     setUploadError(null);
     setShowModal(false);
+  }
+
+  const matchingEmployees = employees.filter((employee) => employee.name.toLowerCase().includes(employeeSearch.trim().toLowerCase()));
+
+  function toggleEmployee(employeeId: string) {
+    setSelectedEmployeeIds((current) => current.includes(employeeId) ? current.filter((id) => id !== employeeId) : [...current, employeeId]);
   }
 
   return (
@@ -194,9 +241,9 @@ export default function DocumentsPage() {
                       {d.description}
                     </p>
                   )}
-                  {canManage && !d.is_visible_to_all && (
+                  {canManage && d.visibility !== 'ALL' && (
                     <span className="mt-1 inline-flex px-1.5 py-0.5 font-mono text-[10px] uppercase" style={{ background: 'var(--status-neutral-bg)', color: 'var(--text-secondary)', borderRadius: 'var(--radius-sm)' }}>
-                      Restricted / HR Only
+                      {d.visibility === 'MANAGER_ONLY' ? 'Manager only' : 'Selected employees'}
                     </span>
                   )}
                   <div className="mt-2 flex items-center gap-2 text-xs" style={{ color: 'var(--text-muted)' }}>
@@ -269,6 +316,24 @@ export default function DocumentsPage() {
               <div>
                 <p className="font-mono text-[10px] uppercase tracking-wide" style={{ color: 'var(--text-secondary)' }}>Uploaded</p>
                 <p className="mt-1 text-sm" style={{ color: 'var(--ink)' }}>{selectedDocument.uploaded_at}</p>
+              </div>
+              <div>
+                <p className="font-mono text-[10px] uppercase tracking-wide" style={{ color: 'var(--text-secondary)' }}>Visible to</p>
+                <p className="mt-1 text-sm" style={{ color: 'var(--ink)' }}>
+                  {selectedDocument.visibility === 'ALL' ? 'All employees' : selectedDocument.visibility === 'MANAGER_ONLY' ? 'Managers' : 'HR, managers & selected employees'}
+                </p>
+                <div className="mt-2 space-y-2">
+                  {documentViewers.length === 0 ? (
+                    <p className="text-xs" style={{ color: 'var(--text-muted)' }}>No employee details available.</p>
+                  ) : documentViewers.map((employee) => (
+                    <div key={employee.id} className="border-l-2 pl-3" style={{ borderColor: 'var(--line-soft)' }}>
+                      <p className="text-sm font-medium" style={{ color: 'var(--ink)' }}>{employee.name}</p>
+                      <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+                        {designations.find((designation) => designation.id === employee.designation_id)?.name ?? 'Designation unavailable'} · {departments.find((department) => department.id === employee.department_id)?.name ?? 'Department unavailable'}
+                      </p>
+                    </div>
+                  ))}
+                </div>
               </div>
               <div>
                 <p className="font-mono text-[10px] uppercase tracking-wide" style={{ color: 'var(--text-secondary)' }}>File</p>
@@ -387,15 +452,48 @@ export default function DocumentsPage() {
                 </select>
               </label>
 
-              <label className="flex items-center gap-2 text-sm" style={{ color: 'var(--ink)' }}>
-                <input
-                  type="checkbox"
-                  checked={isVisibleToAll}
-                  onChange={(event) => setIsVisibleToAll(event.target.checked)}
-                  className="h-4 w-4"
-                />
-                <span>Visible to all employees</span>
+              <label className="block">
+                <span className="text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-secondary)' }}>
+                  Visibility
+                </span>
+                <select
+                  value={visibility}
+                  onChange={(event) => setVisibility(event.target.value as CompanyDocVisibility)}
+                  className="mt-1.5 w-full border px-3 py-2 text-sm outline-none"
+                  style={inputStyle}
+                >
+                  <option value="ALL">Visible to all</option>
+                  <option value="MANAGER_ONLY">Visible to manager only</option>
+                  <option value="SELECTED_EMPLOYEES">Visible to HR, managers &amp; selected employees</option>
+                </select>
               </label>
+
+              {visibility === 'SELECTED_EMPLOYEES' && (
+                <div>
+                  <span className="text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-secondary)' }}>
+                    Selected employees
+                  </span>
+                  <input
+                    type="search"
+                    value={employeeSearch}
+                    onChange={(event) => setEmployeeSearch(event.target.value)}
+                    placeholder="Search employees"
+                    className="mt-1.5 w-full border px-3 py-2 text-sm outline-none"
+                    style={inputStyle}
+                  />
+                  <div className="mt-2 max-h-36 overflow-y-auto border p-2" style={{ borderColor: 'var(--line)', borderRadius: 'var(--radius-sm)' }}>
+                    {matchingEmployees.length === 0 ? (
+                      <p className="px-1 py-2 text-xs" style={{ color: 'var(--text-muted)' }}>No employees found.</p>
+                    ) : matchingEmployees.map((employee) => (
+                      <label key={employee.id} className="flex cursor-pointer items-center gap-2 px-1 py-1.5 text-sm" style={{ color: 'var(--ink)' }}>
+                        <input type="checkbox" checked={selectedEmployeeIds.includes(employee.id)} onChange={() => toggleEmployee(employee.id)} className="h-4 w-4" />
+                        <span>{employee.name}</span>
+                      </label>
+                    ))}
+                  </div>
+                  <p className="mt-1 text-xs" style={{ color: 'var(--text-muted)' }}>{selectedEmployeeIds.length} employee{selectedEmployeeIds.length === 1 ? '' : 's'} selected</p>
+                </div>
+              )}
 
               <label className="block">
                 <span className="text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-secondary)' }}>

@@ -1,12 +1,13 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { useMemo } from 'react';
-import { formatHolidayDate, resolveEventImage, stripMarkdown, useHolidays, type HolidayCategory } from '../data/holidays';
+import { formatHolidayDateTime, getTodayIso, resolveEventImage, stripMarkdown, useHolidays, type HolidayCategory } from '../data/holidays';
 import { useUpcomingEvents } from '../data/events';
 import type { Employee } from '../data/employees';
 
 type UpcomingItem = {
   id: string;
   date: string;
+  event_time?: string | null;
   name: string;
   category: HolidayCategory | 'Announcement' | 'Birthday' | 'Work Anniversary';
   description?: string | null;
@@ -29,7 +30,7 @@ export function UpcomingHolidays({ canManage = false, employees = [] }: { canMan
   const upcomingEvents = useUpcomingEvents(employees, 5);
 
   const items = useMemo<UpcomingItem[]>(() => {
-    const todayIso = new Date().toISOString().slice(0, 10);
+    const todayIso = getTodayIso();
     const seen = new Set<string>();
 
     const mixed: UpcomingItem[] = [];
@@ -41,6 +42,7 @@ export function UpcomingHolidays({ canManage = false, employees = [] }: { canMan
       mixed.push({
         id: h.id,
         date: h.date,
+        event_time: h.event_time ?? null,
         name: h.name,
         category: h.category,
         description: h.description ?? null,
@@ -126,7 +128,7 @@ export function UpcomingHolidays({ canManage = false, employees = [] }: { canMan
                     </p>
                   )}
                   <p className="mt-1 text-xs" style={{ color: 'var(--text-secondary)' }}>
-                    {formatHolidayDate(item.date)}
+                    {formatHolidayDateTime(item.date, item.event_time)}
                   </p>
                 </div>
                 <span

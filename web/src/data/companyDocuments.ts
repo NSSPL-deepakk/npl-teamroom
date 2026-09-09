@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 
 export type CompanyDocCategory = 'Policy' | 'Letter Template' | 'Form' | 'Other';
+export type CompanyDocVisibility = 'ALL' | 'MANAGER_ONLY' | 'SELECTED_EMPLOYEES';
 
 export interface CompanyDocument {
   id: string;
@@ -17,6 +18,8 @@ export interface CompanyDocument {
   uploaded_at: string;
   uploaded_by?: string | null;
   is_visible_to_all: boolean;
+  visibility: CompanyDocVisibility;
+  visible_employee_ids: string[];
 }
 
 const ACCEPTED_MIME_TYPES = new Set([
@@ -40,6 +43,9 @@ function toCategory(value: string | null | undefined): CompanyDocCategory {
 }
 
 function normalizeDocument(row: any): CompanyDocument {
+  const visibility = (row.visibility === 'MANAGER_ONLY' || row.visibility === 'SELECTED_EMPLOYEES'
+    ? row.visibility
+    : row.is_visible_to_all === false ? 'MANAGER_ONLY' : 'ALL') as CompanyDocVisibility;
   return {
     id: row.id,
     name: row.name,
@@ -49,6 +55,8 @@ function normalizeDocument(row: any): CompanyDocument {
     uploaded_at: row.uploaded_at ? new Date(row.uploaded_at).toISOString().slice(0, 10) : '',
     uploaded_by: row.uploaded_by ?? null,
     is_visible_to_all: row.is_visible_to_all !== false,
+    visibility,
+    visible_employee_ids: Array.isArray(row.visible_employee_ids) ? row.visible_employee_ids : [],
     file: {
       name: row.name,
       type: row.file_type ?? 'application/octet-stream',
@@ -114,7 +122,7 @@ export function useCompanyDocuments() {
     void refresh();
   }, [refresh]);
 
-  const addDocument = useCallback(async (payload: { name: string; category: CompanyDocCategory; description?: string; file?: File; is_visible_to_all: boolean }) => {
+  const addDocument = useCallback(async (payload: { name: string; category: CompanyDocCategory; description?: string; file?: File; visibility: CompanyDocVisibility; visible_employee_ids: string[] }) => {
     if (!payload.file) {
       throw new Error('Please select a PDF, DOCX, or XLSX file first.');
     }
@@ -145,7 +153,9 @@ export function useCompanyDocuments() {
         file_type: getFileExtension(payload.file.name),
         file_size_bytes: payload.file.size,
         uploaded_by: employeeId,
-        is_visible_to_all: payload.is_visible_to_all,
+        is_visible_to_all: payload.visibility === 'ALL',
+        visibility: payload.visibility,
+        visible_employee_ids: payload.visible_employee_ids,
       })
       .select('*')
       .single();

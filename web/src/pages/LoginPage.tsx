@@ -51,10 +51,18 @@ export default function LoginPage() {
       {/* Left — form */}
       <div className="flex flex-col justify-between px-8 py-10 sm:px-16 lg:px-20">
         <div className="flex items-center gap-2.5">
-          <span className="flex h-[72px] w-[140px] shrink-0 items-center justify-center overflow-visible bg-[var(--ink)]">
-            <img src="/logo_nlp.png" alt="Roster HR" className="h-full w-full object-contain" />
+          <span className="flex h-[72px] w-[140px] shrink-0 items-center justify-center overflow-visible">
+            <img
+              src="/logo.jpeg"
+              alt="Roster HR"
+              className="h-full w-full object-contain"
+            />
           </span>
-          <span className="font-mono text-xs tracking-[0.18em]" style={{ color: 'var(--text-secondary)' }}>
+
+          <span
+            className="font-mono text-xs tracking-[0.18em]"
+            style={{ color: 'var(--text-secondary)' }}
+          >
             ROSTER HR
           </span>
         </div>
@@ -105,20 +113,18 @@ export default function LoginPage() {
                 style={{ borderColor: 'var(--line)', borderRadius: 'var(--radius-sm)' }}
               />
             </label>
-
             {error && (
               <p className="text-sm" style={{ color: 'var(--status-absent)' }}>
                 {error}
               </p>
             )}
-
             <button
               type="submit"
               disabled={submitting}
               className="w-full py-2.5 text-sm font-medium transition-opacity hover:opacity-90 disabled:opacity-60"
               style={{ background: 'var(--ink)', color: 'var(--text-on-ink)', borderRadius: 'var(--radius-sm)' }}
             >
-              {submitting ? 'Signing in…' : 'Sign in'}
+              {submitting ? 'Signing in...' : 'Sign in'}
             </button>
           </form>
         </div>

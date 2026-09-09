@@ -8,6 +8,7 @@ const REAL_HOLIDAY_CATEGORIES: HolidayCategory[] = ['National Holiday', 'Optiona
 export interface Holiday {
   id: string;
   date: string; // YYYY-MM-DD
+  event_time?: string | null; // HH:mm:ss
   name: string;
   category: HolidayCategory;
   description?: string | null;
@@ -151,6 +152,20 @@ export function stripMarkdown(text: string): string {
     .trim();
 }
 
+export function getTodayIso(): string {
+  const today = new Date();
+  return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+}
+
+export function formatHolidayDateTime(iso: string, eventTime?: string | null): string {
+  const formattedDate = formatHolidayDate(iso);
+  if (!eventTime) return formattedDate;
+  const [hours, minutes] = eventTime.split(':').map(Number);
+  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return formattedDate;
+  const time = new Date(2000, 0, 1, hours, minutes).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' });
+  return `${formattedDate} · ${time}`;
+}
+
 export function useHolidays() {
   const [holidays, setHolidays] = useState<Holiday[]>([]);
   const [loading, setLoading] = useState(true);
@@ -160,7 +175,7 @@ export function useHolidays() {
     setLoading(true);
     const { data, error } = await supabase
       .from('holidays')
-      .select('id, date, name, category, description, image')
+      .select('id, date, event_time, name, category, description, image')
       .order('date', { ascending: true });
     if (error) {
       setError(error.message);
@@ -181,7 +196,7 @@ export function useHolidays() {
     const { data, error } = await supabase
       .from('holidays')
       .insert(h)
-      .select('id, date, name, category, description, image')
+      .select('id, date, event_time, name, category, description, image')
       .single();
     if (error) {
       console.error('[Holidays] Could not add holiday:', error);
@@ -195,7 +210,7 @@ export function useHolidays() {
       .from('holidays')
       .update(changes)
       .eq('id', id)
-      .select('id, date, name, category, description, image')
+      .select('id, date, event_time, name, category, description, image')
       .single();
     if (error) {
       console.error('[Holidays] Could not update holiday:', error);
@@ -217,7 +232,9 @@ export function useHolidays() {
 }
 
 export function upcomingHolidays(holidays: Holiday[], from = new Date(), limit = 4): Holiday[] {
-  const today = from.toISOString().slice(0, 10);
+  const today = from.getFullYear() === new Date().getFullYear() && from.getMonth() === new Date().getMonth() && from.getDate() === new Date().getDate()
+    ? getTodayIso()
+    : `${from.getFullYear()}-${String(from.getMonth() + 1).padStart(2, '0')}-${String(from.getDate()).padStart(2, '0')}`;
   return holidays.filter((h) => h.date >= today).slice(0, limit);
 }
 

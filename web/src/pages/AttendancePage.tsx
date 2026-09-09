@@ -10,12 +10,14 @@ import {
 } from '../data/attendance';
 import { useCurrentEmployee } from '../data/currentUser';
 import { useDepartments } from '../data/departments';
+import { useDesignations } from '../data/designations';
 import { useEmployees, type WorkMode } from '../data/employees';
 import { classifyDay, useHolidays } from '../data/holidays';
 import { useLeaveRequests } from '../data/leave';
 import type { Role } from '../data/roles';
 import { ChevronRight } from 'lucide-react';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { Drawer } from '../components/Drawer';
 
 type Ctx = { role: Role };
 
@@ -25,6 +27,7 @@ type LocationState =
   | { status: 'done'; coords: { latitude: number; longitude: number } | null };
 
 type ApprovalAction = { id: string; action: 'approve' | 'reject' } | null;
+type AttendanceMetric = 'present' | 'absent' | 'leave' | 'wfh' | 'late';
 
 const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 const WORK_MODES: WorkMode[] = ['OFFICE', 'WFH', 'HYBRID'];
@@ -41,27 +44,13 @@ function minutesBetween(checkIn: string | null, checkOut: string | null): number
   return Math.max(0, outHours * 60 + outMinutes - (inHours * 60 + inMinutes));
 }
 
-function formatDurationLabel(minutes: number): string {
-  if (minutes <= 0) return '—';
-  return `${Math.floor(minutes / 60)}h ${String(minutes % 60).padStart(2, '0')}m`;
-}
-
-function formatAttendanceTime(time: string | null): string {
-  if (!time) return '—';
-  const [hour, minute] = time.split(':').map(Number);
-  return new Date(2000, 0, 1, hour, minute).toLocaleTimeString('en-IN', {
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-}
-
-
 export default function AttendancePage() {
   const navigate = useNavigate();
   const { role } = useOutletContext<Ctx>();
   const employee = useCurrentEmployee(role);
   const { employees } = useEmployees();
   const { departments } = useDepartments();
+  const { designations } = useDesignations();
   const { holidays } = useHolidays();
   const { requests: leaveRequests } = useLeaveRequests();
   const { records, checkIn, checkOut, addManualEntry, approveRecord, rejectRecord, today, loading, error } = useAttendance();
@@ -93,6 +82,7 @@ export default function AttendancePage() {
   const [organizationWorkMode, setOrganizationWorkMode] = useState<'ALL' | WorkMode>('ALL');
   const [superAdminSection, setSuperAdminSection] = useState<'overview' | 'employees'>('overview');
   const [approvalAction, setApprovalAction] = useState<ApprovalAction>(null);
+  const [selectedMetric, setSelectedMetric] = useState<AttendanceMetric | null>(null);
 
   const currentEmployee = employee ?? employees[0] ?? null;
   const visibleEmployee = selectedEmployeeId
@@ -310,6 +300,35 @@ export default function AttendancePage() {
       });
   }, [employees, records, year, month, today, holidays, leaveRequests]);
 
+  const todayDetailRows = useMemo(() => employees.map((employee) => {
+    const sessions = records
+      .filter((record) => record.employee_id === employee.id && record.date === today)
+      .sort((a, b) => (a.check_in ?? '').localeCompare(b.check_in ?? ''));
+    const sessionsWithCheckIn = sessions.filter((session) => session.check_in);
+    const firstSession = sessionsWithCheckIn[0] ?? sessions[0] ?? null;
+    const lastSession = [...sessionsWithCheckIn].reverse()[0] ?? null;
+    const approvedLeave = leaveRequests.some((request) => request.employee_id === employee.id && request.status === 'APPROVED' && today >= request.start_date && today <= request.end_date);
+    const present = sessionsWithCheckIn.length > 0;
+    const late = sessionsWithCheckIn.some((session) => session.check_in! > '09:15');
+    const workedMinutes = sessions.reduce((sum, session) => sum + minutesBetween(session.check_in, session.check_out ?? session.check_in), 0);
+    const department = departments.find((item) => item.id === employee.department_id)?.name ?? 'Unknown';
+    const designation = designations.find((item) => item.id === employee.designation_id)?.name ?? 'Designation unavailable';
+    return {
+      employee,
+      department,
+      designation,
+      sessions,
+      firstSession,
+      lastSession,
+      approvedLeave,
+      present,
+      late,
+      wfh: present && sessionsWithCheckIn.some((session) => session.work_mode === 'WFH'),
+      workedMinutes,
+      status: approvedLeave ? 'On leave' : present ? (late ? 'Late' : 'Present') : 'Absent',
+    };
+  }), [employees, records, today, leaveRequests, departments]);
+
   const organizationRows = useMemo(() => organizationAllRows.filter((row) => {
     const search = searchTerm.trim().toLowerCase();
     const managerOk = managerFilter === 'ALL' || row.employee.manager_id === managerFilter;
@@ -320,45 +339,10 @@ export default function AttendancePage() {
     return managerOk && departmentOk && employeeOk && workModeOk && statusOk && (!search || row.employee.name.toLowerCase().includes(search));
   }), [organizationAllRows, departmentFilter, employeeFilter, searchTerm, statusFilter, managerFilter, organizationWorkMode]);
 
-  const todayAttendanceRows = useMemo(() => employees.map((emp) => {
-    const sessions = records
-      .filter((record) => record.employee_id === emp.id && record.date === today)
-      .sort((a, b) => (a.check_in ?? '').localeCompare(b.check_in ?? ''));
-    const firstSession = sessions.find((session) => session.check_in) ?? sessions[0];
-    const lastSession = [...sessions].reverse().find((session) => session.check_out) ?? sessions[sessions.length - 1];
-    const runningEnd = new Date().toTimeString().slice(0, 5);
-    const workedMinutes = sessions.reduce(
-      (sum, session) => sum + minutesBetween(session.check_in, session.check_out ?? runningEnd),
-      0,
-    );
-    const onLeave = leaveRequests.some((request) => request.employee_id === emp.id && request.status === 'APPROVED' && today >= request.start_date && today <= request.end_date);
-    const status = onLeave ? 'On leave' : firstSession?.status === 'ABSENT' ? 'Absent' : firstSession?.check_in && firstSession.check_in > '09:15' ? 'Late' : firstSession ? 'Present' : 'Not checked in';
-    const manualReasons = sessions
-      .filter((session) => session.is_manual_entry)
-      .map((session) => session.manual_entry_reason?.trim())
-      .filter((reason): reason is string => Boolean(reason));
-    return {
-      employee: emp,
-      status,
-      checkIn: firstSession?.check_in ?? null,
-      checkOut: lastSession?.check_out ?? null,
-      workedMinutes,
-      manualReason: manualReasons[0] ?? null,
-      isManual: sessions.some((session) => session.is_manual_entry),
-    };
-  }), [employees, records, today, leaveRequests]);
-
-  const todayAttendanceMetrics = useMemo(() => ({
-    present: todayAttendanceRows.filter((row) => row.status === 'Present' || row.status === 'Late').length,
-    absent: todayAttendanceRows.filter((row) => row.status === 'Absent').length,
-    onLeave: todayAttendanceRows.filter((row) => row.status === 'On leave').length,
-    notCheckedIn: todayAttendanceRows.filter((row) => row.status === 'Not checked in').length,
-  }), [todayAttendanceRows]);
-
   const organizationMetrics = useMemo(() => {
     const activeEmployees = employees;
-    const present = activeEmployees.filter((emp) => records.some((record) => record.employee_id === emp.id && record.date === today));
-    const leave = activeEmployees.filter((emp) => leaveRequests.some((request) => request.employee_id === emp.id && request.status === 'APPROVED' && today >= request.start_date && today <= request.end_date));
+    const present = todayDetailRows.filter((row) => row.present);
+    const leave = todayDetailRows.filter((row) => row.approvedLeave);
     const rows = organizationAllRows;
     const requiredMinutes = rows.reduce((sum, row) => sum + row.requiredMinutes, 0);
     const workedMinutes = rows.reduce((sum, row) => sum + row.workedMinutes, 0);
@@ -369,15 +353,15 @@ export default function AttendancePage() {
       presentToday: present.length,
       absentToday: Math.max(0, activeEmployees.length - present.length - leave.length),
       onLeave: leave.length,
-      wfh: present.filter((emp) => records.some((record) => record.employee_id === emp.id && record.date === today && record.work_mode === 'WFH')).length,
-      late: activeEmployees.filter((emp) => records.some((record) => record.employee_id === emp.id && record.date === today && record.check_in && record.check_in > '09:15')).length,
+      wfh: todayDetailRows.filter((row) => row.wfh).length,
+      late: todayDetailRows.filter((row) => row.late).length,
       requiredMinutes,
       workedMinutes,
       overtime,
       shortfall,
       attendance: requiredMinutes ? Math.min(100, (workedMinutes / requiredMinutes) * 100) : 0,
     };
-  }, [employees, records, today, leaveRequests, organizationAllRows]);
+  }, [employees, todayDetailRows, organizationAllRows]);
 
   const titleEmployee = targetEmployee ?? currentEmployee;
   const approvalMessage = approvalAction?.action === 'approve' ? 'Are you sure you want to approve this record?' : 'Are you sure you want to reject this record?';
@@ -387,13 +371,17 @@ export default function AttendancePage() {
 
   if (isSuperAdmin) {
     const metricCards = [
-      ['Total Employees', organizationMetrics.totalEmployees, 'var(--ink)'],
-      ['Present Today', organizationMetrics.presentToday, 'var(--status-present)'],
-      ['Absent Today', organizationMetrics.absentToday, 'var(--status-absent)'],
-      ['On Leave', organizationMetrics.onLeave, '#F59E0B'],
-      ['WFH', organizationMetrics.wfh, 'var(--accent-structure)'],
-      ['Late Today', organizationMetrics.late, '#B45309'],
-    ];
+      ['Total Employees', organizationMetrics.totalEmployees, 'var(--ink)', null],
+      ['Present Today', organizationMetrics.presentToday, 'var(--status-present)', 'present'],
+      ['Absent Today', organizationMetrics.absentToday, 'var(--status-absent)', 'absent'],
+      ['On Leave', organizationMetrics.onLeave, '#F59E0B', 'leave'],
+      ['WFH', organizationMetrics.wfh, 'var(--accent-structure)', 'wfh'],
+      ['Late Today', organizationMetrics.late, '#B45309', 'late'],
+    ] as const;
+    const selectedEmployees = selectedMetric
+      ? todayDetailRows.filter((row) => selectedMetric === 'present' ? row.present : selectedMetric === 'absent' ? !row.present && !row.approvedLeave : selectedMetric === 'leave' ? row.approvedLeave : selectedMetric === 'wfh' ? row.wfh : row.late)
+      : [];
+    const selectedLabel = selectedMetric === 'present' ? 'Present Today' : selectedMetric === 'absent' ? 'Absent Today' : selectedMetric === 'leave' ? 'On Leave' : selectedMetric === 'wfh' ? 'WFH' : 'Late Today';
 
     return (
       <div className="space-y-6">
@@ -422,28 +410,13 @@ export default function AttendancePage() {
         </div>
 
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
-          {metricCards.map(([label, value, color]) => <div key={label} className="relative overflow-hidden border bg-white p-4" style={{ borderColor: 'var(--line-soft)', borderRadius: 'var(--radius-sm)' }}><span className="absolute inset-y-0 left-0 w-1" style={{ background: color as string }} /><p className="pl-2 font-mono text-[10px] uppercase tracking-wide" style={{ color: 'var(--text-secondary)' }}>{label}</p><p className="mt-2 pl-2 text-2xl font-semibold tabular" style={{ color: color as string }}>{value}</p></div>)}
+          {metricCards.map(([label, value, color, metric]) => <button key={label} type="button" onClick={() => metric && setSelectedMetric(metric)} className={`relative overflow-hidden border bg-white p-4 text-left ${metric ? 'cursor-pointer transition-shadow hover:shadow-sm' : ''}`} style={{ borderColor: 'var(--line-soft)', borderRadius: 'var(--radius-sm)' }}><span className="absolute inset-y-0 left-0 w-1" style={{ background: color }} /><p className="pl-2 font-mono text-[10px] uppercase tracking-wide" style={{ color: 'var(--text-secondary)' }}>{label}</p><p className="mt-2 pl-2 text-2xl font-semibold tabular" style={{ color }}>{value}</p></button>)}
         </div>
 
-        <section className="border bg-white" style={{ borderColor: 'var(--line-soft)', borderRadius: 'var(--radius-md)' }}>
-          <div className="flex flex-wrap items-end justify-between gap-3 border-b px-5 py-4" style={{ borderColor: 'var(--line-soft)' }}><div><p className="font-mono text-[10px] uppercase tracking-[0.16em]" style={{ color: 'var(--status-present)' }}>Live register</p><h2 className="mt-1 text-lg font-semibold" style={{ color: 'var(--ink)' }}>Today's attendance</h2></div><span className="font-mono text-[10px] uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>{todayAttendanceRows.length} employees · {new Date(`${today}T00:00:00`).toLocaleDateString('en-IN', { weekday: 'short', day: '2-digit', month: 'short' })}</span></div>
-          <div className="mt-3 grid grid-cols-2 gap-3 lg:grid-cols-4">
-            {[['Present', todayAttendanceMetrics.present, 'var(--status-present)', 'var(--status-present-bg)'], ['Absent', todayAttendanceMetrics.absent, 'var(--status-absent)', 'var(--status-absent-bg)'], ['On leave', todayAttendanceMetrics.onLeave, '#2563EB', '#EFF6FF'], ['Not checked in', todayAttendanceMetrics.notCheckedIn, 'var(--text-muted)', 'var(--status-neutral-bg)']].map(([label, value, color, background]) => <div key={label} className="border p-4" style={{ borderColor: 'var(--line-soft)', background: background as string, borderRadius: 'var(--radius-sm)' }}><div className="flex items-center justify-between"><p className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>{label}</p><span className="h-2 w-2 rounded-full" style={{ background: color as string }} /></div><p className="mt-2 text-2xl font-bold tabular" style={{ color: color as string }}>{value}</p></div>)}
-          </div>
-          <div className="mt-4 overflow-x-auto border-t" style={{ borderColor: 'var(--line-soft)' }}>
-            <table className="w-full min-w-[820px] text-left text-sm">
-              <thead style={{ background: 'var(--paper)' }}><tr><th className="px-5 py-3 font-mono text-[10px] uppercase tracking-wide" style={{ color: 'var(--text-secondary)' }}>Employee</th><th className="px-5 py-3 font-mono text-[10px] uppercase tracking-wide" style={{ color: 'var(--text-secondary)' }}>Check In</th><th className="px-5 py-3 font-mono text-[10px] uppercase tracking-wide" style={{ color: 'var(--text-secondary)' }}>Check Out</th><th className="px-5 py-3 font-mono text-[10px] uppercase tracking-wide" style={{ color: 'var(--text-secondary)' }}>Hours</th><th className="px-5 py-3 font-mono text-[10px] uppercase tracking-wide" style={{ color: 'var(--text-secondary)' }}>Status</th><th className="px-5 py-3 font-mono text-[10px] uppercase tracking-wide" style={{ color: 'var(--text-secondary)' }}>Manual Entry Reason</th></tr></thead>
-              <tbody>{todayAttendanceRows.map((row) => { const statusColor = row.status === 'Present' ? 'var(--status-present)' : row.status === 'Late' ? '#D97706' : row.status === 'Absent' || row.status === 'Not checked in' ? 'var(--status-absent)' : row.status === 'On leave' ? '#2563EB' : 'var(--text-muted)'; return <tr key={row.employee.id} className="border-t transition-colors hover:bg-[var(--paper)]" style={{ borderColor: 'var(--line-soft)' }}><td className="px-5 py-3.5 font-medium" style={{ color: 'var(--ink)' }}>{row.employee.name}</td><td className="px-5 py-3.5 font-mono text-xs" style={{ color: 'var(--text-secondary)' }}>{formatAttendanceTime(row.checkIn)}</td><td className="px-5 py-3.5 font-mono text-xs" style={{ color: 'var(--text-secondary)' }}>{formatAttendanceTime(row.checkOut)}</td><td className="px-5 py-3.5 font-mono text-xs font-medium" style={{ color: row.workedMinutes ? 'var(--ink)' : 'var(--text-muted)' }}>{formatDurationLabel(row.workedMinutes)}</td><td className="px-5 py-3.5"><span className="inline-flex items-center gap-2 border px-2 py-1 text-xs font-medium" style={{ color: statusColor, borderColor: `${statusColor}55`, background: `${statusColor}0D`, borderRadius: 'var(--radius-sm)' }}><span className="h-2 w-2 rounded-full" style={{ background: statusColor }} />{row.status}</span></td><td className="max-w-[22rem] px-5 py-3.5 text-xs" style={{ color: row.isManual ? '#B45309' : 'var(--text-muted)' }}>{row.isManual ? <span className="inline-flex items-start gap-2"><span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: '#D97706' }} />{row.manualReason ?? 'Reason required'}</span> : '—'}</td></tr>; })}</tbody>
-            </table>
-          </div>
-        </section>
-
-        <div className="border bg-white p-5" style={{ borderColor: 'var(--line-soft)', borderRadius: 'var(--radius-md)' }}>
-          <div className="flex flex-wrap items-center justify-between gap-3"><h2 className="text-sm font-semibold" style={{ color: 'var(--ink)' }}>Monthly summary</h2><span className="font-mono text-xs" style={{ color: 'var(--text-secondary)' }}>{organizationMetrics.attendance.toFixed(1)}% attendance</span></div>
-          <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-            {[['Required Hours', formatMinutes(organizationMetrics.requiredMinutes)], ['Worked Hours', formatMinutes(organizationMetrics.workedMinutes)], ['Overtime', formatMinutes(organizationMetrics.overtime)], ['Shortfall', formatMinutes(organizationMetrics.shortfall)], ['Attendance', `${organizationMetrics.attendance.toFixed(1)}%`]].map(([label, value]) => <div key={label}><p className="font-mono text-[10px] uppercase tracking-wide" style={{ color: 'var(--text-secondary)' }}>{label}</p><p className="mt-1 text-lg font-semibold" style={{ color: 'var(--ink)' }}>{value}</p></div>)}
-          </div>
-        </div>
+        <Drawer open={selectedMetric !== null} title={selectedLabel} onClose={() => setSelectedMetric(null)}>
+          <p className="mb-4 text-xs" style={{ color: 'var(--text-secondary)' }}>{selectedEmployees.length} employee{selectedEmployees.length === 1 ? '' : 's'} · {today}</p>
+          {selectedEmployees.length === 0 ? <p className="text-sm" style={{ color: 'var(--text-muted)' }}>No matching employees today.</p> : <div className="space-y-4">{selectedEmployees.map((row) => <div key={row.employee.id} className="border-b pb-4 last:border-b-0" style={{ borderColor: 'var(--line-soft)' }}><p className="font-medium" style={{ color: 'var(--ink)' }}>{row.employee.name}</p><p className="mt-1 text-xs" style={{ color: 'var(--text-secondary)' }}>{row.designation} · {row.department} · {row.status}</p>{selectedMetric === 'present' ? <div className="mt-3 grid grid-cols-2 gap-3 text-xs"><span>Check-in<br /><strong>{row.firstSession?.check_in ?? '—'}</strong></span><span>Check-out<br /><strong>{row.lastSession?.check_out ?? '—'}</strong></span><span>Work time<br /><strong>{formatMinutes(row.workedMinutes)}</strong></span><span>Work mode<br /><strong>{row.firstSession?.work_mode ?? '—'}</strong></span><span>Entry type<br /><strong>{row.firstSession?.is_manual_entry ? 'Manual' : 'Automatic'}</strong></span><span>Manual reason<br /><strong>{row.firstSession?.manual_entry_reason ?? '—'}</strong></span></div> : <p className="mt-2 text-xs" style={{ color: 'var(--text-secondary)' }}>{selectedMetric === 'leave' ? 'Approved leave today' : selectedMetric === 'wfh' ? `Work mode: ${row.firstSession?.work_mode ?? 'WFH'}` : selectedMetric === 'late' ? `Check-in: ${row.firstSession?.check_in ?? '—'}` : 'No check-in recorded today'}</p>}</div>)}</div>}
+        </Drawer>
 
         <div className="border bg-white" style={{ borderColor: 'var(--line-soft)', borderRadius: 'var(--radius-md)' }}>
           <div className="border-b p-4" style={{ borderColor: 'var(--line-soft)' }}><div className="grid gap-3 md:grid-cols-3 xl:grid-cols-5">

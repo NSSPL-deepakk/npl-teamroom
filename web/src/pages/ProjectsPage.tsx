@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
+import { ChevronDown, ChevronRight, Pencil } from 'lucide-react';
 import { Drawer } from '../components/Drawer';
 import { StatusTag } from '../components/Ledger';
 import { useClients } from '../data/clients';
@@ -28,7 +29,7 @@ export default function ProjectsPage() {
     const canManage = role === 'SUPER_ADMIN' || role === 'HR' || role === 'MANAGER';
     const { clients, loading: clientsLoading, error: clientsError } = useClients();
     const { employees } = useEmployees();
-    const { projects, addProject, updateProject, toggleStatus, loading: projectsLoading, error: projectsError } = useProjects();
+    const { projects, addProject, updateProject, loading: projectsLoading, error: projectsError } = useProjects();
     const { tasks, loading: tasksLoading, error: tasksError } = useTasks();
 
     const [drawerOpen, setDrawerOpen] = useState(false);
@@ -40,6 +41,7 @@ export default function ProjectsPage() {
     const [deadline, setDeadline] = useState('');
     const [status, setStatus] = useState<'ACTIVE' | 'ON_HOLD' | 'COMPLETED'>('ACTIVE');
     const [teamMembers, setTeamMembers] = useState<string[]>([]);
+    const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
 
     if (clientsLoading || projectsLoading || tasksLoading) {
         return <p className="py-12 text-center font-mono text-xs uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>Loading projects...</p>;
@@ -49,7 +51,7 @@ export default function ProjectsPage() {
     }
 
     const nameForClient = (id: string) => clients.find((client) => client.id === id)?.name ?? 'Unknown';
-    const nameForEmployee = (id: string) => employees.find((employee) => employee.id === id)?.name ?? 'Unknown';
+    const employeeById = (id: string) => employees.find((employee) => employee.id === id);
 
     function resetForm() {
         setEditingId(null);
@@ -77,6 +79,18 @@ export default function ProjectsPage() {
         setStatus(project.status);
         setTeamMembers(project.team_member_ids);
         setDrawerOpen(true);
+    }
+
+    function toggleExpand(projectId: string) {
+        setExpandedIds((prev) => {
+            const next = new Set(prev);
+            if (next.has(projectId)) {
+                next.delete(projectId);
+            } else {
+                next.add(projectId);
+            }
+            return next;
+        });
     }
 
     function handleSubmit(e: React.FormEvent) {
@@ -163,48 +177,91 @@ export default function ProjectsPage() {
                                     <th className="px-4 py-3 font-mono text-[10px] uppercase tracking-wide" style={{ color: 'var(--text-secondary)' }}>Status</th>
                                     <th className="px-4 py-3 font-mono text-[10px] uppercase tracking-wide" style={{ color: 'var(--text-secondary)' }}>Progress</th>
                                     <th className="px-4 py-3 font-mono text-[10px] uppercase tracking-wide" style={{ color: 'var(--text-secondary)' }}>Deadline</th>
-                                    <th className="px-4 py-3 font-mono text-[10px] uppercase tracking-wide" style={{ color: 'var(--text-secondary)' }}>Team</th>
-                                    <th className="px-4 py-3 font-mono text-[10px] uppercase tracking-wide" style={{ color: 'var(--text-secondary)' }}>Actions</th>
+                                    <th className="px-4 py-3" />
                                 </tr>
                             </thead>
                             <tbody>
-                                {projects.map((project) => (
-                                    <tr key={project.id} style={{ borderTop: '1px solid var(--line-soft)' }}>
-                                        <td className="px-4 py-3 align-top">
-                                            <div className="text-sm font-medium" style={{ color: 'var(--ink)' }}>{project.name}</div>
-                                            <div className="mt-1 text-xs" style={{ color: 'var(--text-secondary)' }}>{project.description}</div>
-                                        </td>
-                                        <td className="px-4 py-3 align-top text-sm" style={{ color: 'var(--text-secondary)' }}>{nameForClient(project.client_id)}</td>
-                                        <td className="px-4 py-3 align-top">
-                                            <StatusTag status={project.status === 'ACTIVE' ? 'present' : project.status === 'COMPLETED' ? 'pending' : 'neutral'} label={project.status} />
-                                        </td>
-                                        <td className="px-4 py-3 align-top font-mono text-xs" style={{ color: 'var(--ink)' }}>
-                                            <div>{projectProgress(project.id)}%</div>
-                                            <div className="mt-1" style={{ color: hoursVariance(project.id).variance > 0 ? 'var(--status-absent)' : 'var(--status-present)' }}>
-                                                {hoursVariance(project.id).variance >= 0 ? '+' : ''}{hoursVariance(project.id).variance}h
-                                            </div>
-                                        </td>
-                                        <td className="px-4 py-3 align-top font-mono text-xs" style={{ color: 'var(--text-secondary)' }}>
-                                            {project.deadline}
-                                        </td>
-                                        <td className="px-4 py-3 align-top text-xs" style={{ color: 'var(--text-secondary)' }}>
-                                            {project.team_member_ids.slice(0, 2).map((id) => nameForEmployee(id)).join(', ')}
-                                            {project.team_member_ids.length > 2 ? ' + more' : ''}
-                                        </td>
-                                        <td className="px-4 py-3 align-top">
-                                            {canManage && (
-                                                <div className="flex items-center gap-2">
-                                                    <button onClick={() => openEdit(project)} className="font-mono text-[11px] uppercase tracking-wide hover:underline" style={{ color: 'var(--text-secondary)' }}>
-                                                        Edit
-                                                    </button>
-                                                    <button onClick={() => toggleStatus(project.id)} className="font-mono text-[11px] uppercase tracking-wide hover:underline" style={{ color: 'var(--status-pending)' }}>
-                                                        {project.status === 'ACTIVE' ? 'Hold' : project.status === 'ON_HOLD' ? 'Resume' : 'Reopen'}
-                                                    </button>
-                                                </div>
+                                {projects.map((project) => {
+                                    const isExpanded = expandedIds.has(project.id);
+                                    return (
+                                        <Fragment key={project.id}>
+                                            <tr
+                                                onClick={() => toggleExpand(project.id)}
+                                                className="cursor-pointer transition-colors hover:bg-[var(--paper)]"
+                                                style={{ borderTop: '1px solid var(--line-soft)' }}
+                                            >
+                                                <td className="px-4 py-3 align-top">
+                                                    <div className="flex items-start gap-2">
+                                                        {isExpanded ? (
+                                                            <ChevronDown size={14} strokeWidth={1.75} className="mt-1 shrink-0" style={{ color: 'var(--text-muted)' }} />
+                                                        ) : (
+                                                            <ChevronRight size={14} strokeWidth={1.75} className="mt-1 shrink-0" style={{ color: 'var(--text-muted)' }} />
+                                                        )}
+                                                        <div>
+                                                            <div className="text-sm font-medium" style={{ color: 'var(--ink)' }}>{project.name}</div>
+                                                            <div className="mt-1 text-xs" style={{ color: 'var(--text-secondary)' }}>{project.description}</div>
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                <td className="px-4 py-3 align-top text-sm" style={{ color: 'var(--text-secondary)' }}>{nameForClient(project.client_id)}</td>
+                                                <td className="px-4 py-3 align-top">
+                                                    <StatusTag status={project.status === 'ACTIVE' ? 'present' : project.status === 'COMPLETED' ? 'pending' : 'neutral'} label={project.status} />
+                                                </td>
+                                                <td className="px-4 py-3 align-top font-mono text-xs" style={{ color: 'var(--ink)' }}>
+                                                    <div>{projectProgress(project.id)}%</div>
+                                                    <div className="mt-1" style={{ color: hoursVariance(project.id).variance > 0 ? 'var(--status-absent)' : 'var(--status-present)' }}>
+                                                        {hoursVariance(project.id).variance >= 0 ? '+' : ''}{hoursVariance(project.id).variance}h
+                                                    </div>
+                                                </td>
+                                                <td className="px-4 py-3 align-top font-mono text-xs" style={{ color: 'var(--text-secondary)' }}>
+                                                    {project.deadline}
+                                                </td>
+                                                <td className="px-4 py-3 align-top text-right">
+                                                    {canManage && (
+                                                        <button
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                openEdit(project);
+                                                            }}
+                                                            aria-label="Edit project"
+                                                            className="inline-flex items-center justify-center p-1 transition-colors hover:opacity-70"
+                                                        >
+                                                            <Pencil size={16} strokeWidth={1.75} style={{ color: 'var(--text-muted)' }} />
+                                                        </button>
+                                                    )}
+                                                </td>
+                                            </tr>
+                                            {isExpanded && (
+                                                <tr style={{ borderTop: '1px solid var(--line-soft)', background: 'var(--paper)' }}>
+                                                    <td colSpan={6} className="px-4 py-4">
+                                                        <p className="font-mono text-[10px] uppercase tracking-wide" style={{ color: 'var(--text-secondary)' }}>
+                                                            Team
+                                                        </p>
+                                                        {project.team_member_ids.length === 0 ? (
+                                                            <p className="mt-2 text-sm" style={{ color: 'var(--text-muted)' }}>
+                                                                No team members assigned.
+                                                            </p>
+                                                        ) : (
+                                                            <div className="mt-2 space-y-1.5">
+                                                                {project.team_member_ids.map((id) => {
+                                                                    const emp = employeeById(id);
+                                                                    return (
+                                                                        <div key={id} className="flex items-center gap-3 text-sm">
+                                                                            <span style={{ color: 'var(--ink)' }}>{emp?.name ?? 'Unknown'}</span>
+                                                                            <span className="font-mono text-xs" style={{ color: 'var(--text-secondary)' }}>
+                                                                                {emp?.email ?? '—'}
+                                                                            </span>
+                                                                        </div>
+                                                                    );
+                                                                })}
+                                                            </div>
+                                                        )}
+                                                    </td>
+                                                </tr>
                                             )}
-                                        </td>
-                                    </tr>
-                                ))}
+                                        </Fragment>
+                                    );
+                                })}
                             </tbody>
                         </table>
                     </div>

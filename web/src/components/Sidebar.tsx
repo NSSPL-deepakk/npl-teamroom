@@ -1,4 +1,5 @@
 import { NavLink } from 'react-router-dom';
+import { ClipboardCheck } from 'lucide-react';
 import { ROLE_NAV, ROLE_LABEL, type Role } from '../data/roles';
 
 export function Sidebar({ role }: { role: Role }) {
@@ -11,14 +12,25 @@ export function Sidebar({ role }: { role: Role }) {
     >
       <div>
         <div className="flex items-center gap-3 px-6 py-6">
-          <span className="flex h-12 w-24 shrink-0 items-center justify-center overflow-visible bg-[var(--ink)]">
-            <img src="/logo_nlp.png" alt="Roster HR" className="h-full w-full object-contain" />
+          <span className="flex h-12 w-24 shrink-0 items-center justify-center overflow-visible">
+            <img
+              src="/logo1.png"
+              alt="Roster HR"
+              className="h-full w-full object-contain"
+            />
           </span>
+
           <div className="flex flex-col">
-            <span className="font-mono text-xs font-semibold tracking-[0.16em]" style={{ color: 'var(--text-on-ink)' }}>
+            <span
+              className="font-mono text-xs font-semibold tracking-[0.16em]"
+              style={{ color: 'var(--text-on-ink)' }}
+            >
               ROSTER
             </span>
-            <span className="font-mono text-[10px] tracking-[0.14em]" style={{ color: 'var(--text-on-ink-muted)' }}>
+            <span
+              className="font-mono text-[10px] tracking-[0.14em]"
+              style={{ color: 'var(--text-on-ink-muted)' }}
+            >
               HR SYSTEM
             </span>
           </div>
@@ -48,7 +60,9 @@ export function Sidebar({ role }: { role: Role }) {
                         color: isActive ? 'var(--text-on-ink)' : 'var(--text-on-ink-muted)',
                       })}
                     >
-                      <span className="text-base shrink-0">{item.icon}</span>
+                      <span className="flex h-4 w-4 shrink-0 items-center justify-center">
+                        {item.iconName === 'onboarding' ? <ClipboardCheck size={15} strokeWidth={1.8} /> : item.icon}
+                      </span>
                       <span>{item.label}</span>
                     </NavLink>
                   </li>

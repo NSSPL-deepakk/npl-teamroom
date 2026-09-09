@@ -6,6 +6,7 @@ import {
   text,
   boolean,
   date,
+  time,
   timestamp,
   pgPolicy,
   index,
@@ -98,6 +99,7 @@ export const holidays = pgTable(
   {
     id: uuid('id').primaryKey().defaultRandom(),
     date: date('date').notNull(),
+    eventTime: time('event_time'),
     name: text('name').notNull(),
     category: holidayCategoryEnum('category').notNull(),
     description: text('description'),

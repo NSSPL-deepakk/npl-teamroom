@@ -4,6 +4,7 @@ export interface NavItem {
   label: string;
   path: string;
   icon: string;
+  iconName?: 'onboarding';
 }
 
 export interface NavGroup {
@@ -25,21 +26,29 @@ export const ROLE_NAV: Record<Role, NavGroup[]> = {
       items: [{ label: 'Dashboard', path: '/dashboard', icon: '▦' }],
     },
     {
-      label: 'People',
+      label: 'HRM',
       items: [
-        { label: 'Employees', path: '/employees', icon: '👥' },
+        { label: 'Employee', path: '/employees', icon: '👥' },
         { label: 'Org Chart', path: '/org-chart', icon: '⌗' },
+        { label: 'Attendance', path: '/attendance', icon: '◷' },
+        { label: 'Leave', path: '/leave', icon: '▣' },
+        { label: 'Holidays & Events', path: '/holidays', icon: '▦' },
       ],
     },
     {
       label: 'Work',
       items: [
-        { label: 'Attendance', path: '/attendance', icon: '◷' },
-        { label: 'Leave Request', path: '/leave', icon: '▣' },
-        { label: 'Clients', path: '/clients', icon: '◈' },
-        { label: 'Projects', path: '/projects', icon: '▣' },
-        { label: 'Tasks', path: '/tasks', icon: '✓' },
-        { label: 'Holidays & Events', path: '/holidays', icon: '▦' },
+        { label: 'Client', path: '/clients', icon: '◈' },
+        { label: 'Project', path: '/projects', icon: '▣' },
+        { label: 'Task', path: '/tasks', icon: '✓' },
+      ],
+    },
+    {
+      label: 'Recruitment',
+      items: [
+        { label: 'Recruitment', path: '/recruitment', icon: '◉' },
+        { label: 'Candidates', path: '/candidates', icon: '○' },
+        { label: 'Onboarding', path: '/onboarding', icon: '', iconName: 'onboarding' },
       ],
     },
     {
@@ -58,22 +67,21 @@ export const ROLE_NAV: Record<Role, NavGroup[]> = {
       items: [{ label: 'Dashboard', path: '/dashboard', icon: '▦' }],
     },
     {
-      label: 'People',
+      label: 'HRM',
       items: [
-        { label: 'Employees', path: '/employees', icon: '👥' },
+        { label: 'Employee', path: '/employees', icon: '👥' },
         { label: 'Org Chart', path: '/org-chart', icon: '⌗' },
-        { label: 'Onboarding', path: '/onboarding', icon: '🌱' },
+        { label: 'Attendance', path: '/attendance', icon: '◷' },
+        { label: 'Leave', path: '/leave', icon: '▣' },
+        { label: 'Holidays & Events', path: '/holidays', icon: '▦' },
       ],
     },
     {
       label: 'Work',
       items: [
-        { label: 'Attendance', path: '/attendance', icon: '◷' },
-        { label: 'Leave Request', path: '/leave', icon: '▣' },
-        { label: 'Clients', path: '/clients', icon: '◈' },
-        { label: 'Projects', path: '/projects', icon: '▣' },
-        { label: 'Tasks', path: '/tasks', icon: '✓' },
-        { label: 'Holidays & Events', path: '/holidays', icon: '▦' },
+        { label: 'Client', path: '/clients', icon: '◈' },
+        { label: 'Project', path: '/projects', icon: '▣' },
+        { label: 'Task', path: '/tasks', icon: '✓' },
       ],
     },
     {
@@ -81,6 +89,7 @@ export const ROLE_NAV: Record<Role, NavGroup[]> = {
       items: [
         { label: 'Recruitment', path: '/recruitment', icon: '◉' },
         { label: 'Candidates', path: '/candidates', icon: '○' },
+        { label: 'Onboarding', path: '/onboarding', icon: '', iconName: 'onboarding' },
       ],
     },
     {
@@ -100,18 +109,23 @@ export const ROLE_NAV: Record<Role, NavGroup[]> = {
       label: 'Team',
       items: [
         { label: 'Team', path: '/team', icon: '👥' },
+      ],
+    },
+    {
+      label: 'HRM',
+      items: [
         { label: 'Org Chart', path: '/org-chart', icon: '⌗' },
+        { label: 'Attendance', path: '/attendance', icon: '◷' },
+        { label: 'Leave', path: '/leave', icon: '▣' },
+        { label: 'Holidays & Events', path: '/holidays', icon: '▦' },
       ],
     },
     {
       label: 'Work',
       items: [
-        { label: 'Attendance', path: '/attendance', icon: '◷' },
-        { label: 'Leave Request', path: '/leave', icon: '▣' },
-        { label: 'Clients', path: '/clients', icon: '◈' },
-        { label: 'Projects', path: '/projects', icon: '▣' },
-        { label: 'Tasks', path: '/tasks', icon: '✓' },
-        { label: 'Holidays & Events', path: '/holidays', icon: '▦' },
+        { label: 'Client', path: '/clients', icon: '◈' },
+        { label: 'Project', path: '/projects', icon: '▣' },
+        { label: 'Task', path: '/tasks', icon: '✓' },
       ],
     },
     {
@@ -127,12 +141,22 @@ export const ROLE_NAV: Record<Role, NavGroup[]> = {
       items: [{ label: 'Dashboard', path: '/dashboard', icon: '▦' }],
     },
     {
-      label: 'Me',
+      label: 'HRM',
       items: [
         { label: 'Attendance', path: '/attendance', icon: '◷' },
-        { label: 'Leave Request', path: '/leave', icon: '▣' },
-        { label: 'Tasks', path: '/tasks', icon: '✓' },
+        { label: 'Leave', path: '/leave', icon: '▣' },
         { label: 'Holidays & Events', path: '/holidays', icon: '▦' },
+      ],
+    },
+    {
+      label: 'Work',
+      items: [
+        { label: 'Task', path: '/tasks', icon: '✓' },
+      ],
+    },
+    {
+      label: 'Me',
+      items: [
         { label: 'Documents', path: '/documents', icon: '▤' },
       ],
     },

@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
 import { useEmployees } from '../data/employees';
-import { formatHolidayDate, getComputedEmployeeEvents, resolveEventImage, stripMarkdown, useHolidays, type HolidayCategory } from '../data/holidays';
+import { formatHolidayDateTime, getComputedEmployeeEvents, getTodayIso, resolveEventImage, stripMarkdown, useHolidays, type HolidayCategory } from '../data/holidays';
 import type { Role } from '../data/roles';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 
@@ -11,6 +11,7 @@ type FilterKey = 'ALL' | 'Holiday' | 'Announcement' | 'Birthday' | 'Anniversary'
 type CalendarRow = {
   id: string;
   date: string;
+  event_time?: string | null;
   name: string;
   kind: 'Holiday' | 'Announcement' | 'Birthday' | 'Anniversary';
   group: HolidayCategory | 'Birthday' | 'Anniversary';
@@ -47,6 +48,7 @@ export default function HolidaysPage() {
   const { employees, updateEmployee } = useEmployees();
 
   const [date, setDate] = useState('');
+  const [eventTime, setEventTime] = useState('');
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState<HolidayCategory>('Company Holiday');
@@ -75,6 +77,7 @@ export default function HolidaysPage() {
     return employees.flatMap((employee) => getComputedEmployeeEvents(employee)).map((event) => ({
       id: event.id,
       date: event.date,
+      event_time: null,
       name: event.name,
       kind: event.kind,
       group: event.category,
@@ -90,6 +93,7 @@ export default function HolidaysPage() {
     const manual: CalendarRow[] = holidays.map((h) => ({
       id: h.id,
       date: h.date,
+      event_time: h.event_time ?? null,
       name: h.name,
       kind: h.category === 'Announcement' ? 'Announcement' : 'Holiday',
       group: h.category,
@@ -99,7 +103,7 @@ export default function HolidaysPage() {
       source: 'manual',
     }));
 
-    return [...manual, ...generatedRows].sort((a, b) => a.date.localeCompare(b.date));
+    return [...manual, ...generatedRows].filter((row) => row.date >= getTodayIso()).sort((a, b) => a.date.localeCompare(b.date));
   }, [generatedRows, holidays]);
 
   const filtered = combined.filter((row) => {
@@ -110,6 +114,7 @@ export default function HolidaysPage() {
 
   function resetForm() {
     setDate('');
+    setEventTime('');
     setName('');
     setDescription('');
     setCategory('Company Holiday');
@@ -119,10 +124,11 @@ export default function HolidaysPage() {
 
   function handleAdd(e: React.FormEvent) {
     e.preventDefault();
-    if (!date || !name.trim()) return;
+    if (!date || !eventTime || !name.trim()) return;
 
     const payload = {
       date,
+      event_time: eventTime,
       name: name.trim(),
       category,
       description: description.trim() || null,
@@ -141,6 +147,7 @@ export default function HolidaysPage() {
   function handleEdit(row: CalendarRow) {
     setEditingId(row.id);
     setDate(row.date);
+    setEventTime(row.event_time?.slice(0, 5) ?? '');
     setName(row.name);
     setDescription(row.description ?? '');
     setCategory(row.group as HolidayCategory);
@@ -165,8 +172,6 @@ export default function HolidaysPage() {
     setMessageDraft('');
     setMessageError('');
   }
-
-  const today = new Date().toISOString().slice(0, 10);
 
   return (
     <div>
@@ -214,14 +219,13 @@ export default function HolidaysPage() {
           ) : (
             <ul>
               {filtered.map((row) => {
-                const isPast = row.date < today;
                 const tag = rowStyle(row.group);
                 return (
                   <li
                     key={row.id}
                     onClick={() => navigate(`/events/${row.id}`, { state: { event: row } })}
                     className="flex cursor-pointer items-center gap-4 border-b px-5 py-3.5 last:border-b-0"
-                    style={{ borderColor: 'var(--line-soft)', opacity: isPast ? 0.6 : 1 }}
+                    style={{ borderColor: 'var(--line-soft)' }}
                   >
                     <img
                       src={resolveEventImage(row.image ?? null, row.name, row.group)}
@@ -252,7 +256,7 @@ export default function HolidaysPage() {
                         </p>
                       )}
                       <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
-                        {formatHolidayDate(row.date)}
+                        {formatHolidayDateTime(row.date, row.event_time)}
                       </p>
                     </div>
                     <span className="font-mono px-2 py-0.5 text-[10px] uppercase" style={{ ...tag, borderRadius: 'var(--radius-sm)' }}>
@@ -331,19 +335,34 @@ export default function HolidaysPage() {
               {editingId ? 'Edit item' : 'Add an item'}
             </h3>
             <form onSubmit={handleAdd} className="mt-4 space-y-4">
-              <label className="block">
-                <span className="text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-secondary)' }}>
-                  Date
-                </span>
-                <input
-                  type="date"
-                  required
-                  value={date}
-                  onChange={(e) => setDate(e.target.value)}
-                  className="mt-1.5 w-full border px-3 py-2 text-sm outline-none"
-                  style={{ borderColor: 'var(--line)', borderRadius: 'var(--radius-sm)' }}
-                />
-              </label>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <label className="block">
+                  <span className="text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-secondary)' }}>
+                    Event Date
+                  </span>
+                  <input
+                    type="date"
+                    required
+                    value={date}
+                    onChange={(e) => setDate(e.target.value)}
+                    className="mt-1.5 w-full border px-3 py-2 text-sm outline-none"
+                    style={{ borderColor: 'var(--line)', borderRadius: 'var(--radius-sm)' }}
+                  />
+                </label>
+                <label className="block">
+                  <span className="text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-secondary)' }}>
+                    Event Time
+                  </span>
+                  <input
+                    type="time"
+                    required
+                    value={eventTime}
+                    onChange={(e) => setEventTime(e.target.value)}
+                    className="mt-1.5 w-full border px-3 py-2 text-sm outline-none"
+                    style={{ borderColor: 'var(--line)', borderRadius: 'var(--radius-sm)' }}
+                  />
+                </label>
+              </div>
               <label className="block">
                 <span className="text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-secondary)' }}>
                   Name

@@ -94,5 +94,20 @@ export function useLeaveRequests() {
   const approve = useCallback((id: string) => decide(id, 'APPROVED'), [decide]);
   const reject = useCallback((id: string) => decide(id, 'REJECTED'), [decide]);
 
-  return { requests, requestLeave, approve, reject, loading, error, refresh };
+  const updateRequest = useCallback(async (id: string, changes: { employee_id: string; type: LeaveType; start_date: string; end_date: string; reason: string }) => {
+    const { data, error: updateError } = await supabase
+      .from('leave_requests')
+      .update(changes)
+      .eq('id', id)
+      .select(SELECT_COLUMNS)
+      .single();
+    if (updateError) {
+      console.error('[Leave] Could not update request:', updateError);
+      return updateError.message;
+    }
+    setRequests((prev) => prev.map((request) => (request.id === id ? data as LeaveRequest : request)));
+    return null;
+  }, []);
+
+  return { requests, requestLeave, updateRequest, approve, reject, loading, error, refresh };
 }

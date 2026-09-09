@@ -67,31 +67,23 @@ export default function TaskDetailsPage() {
         );
     }
 
-    async function handleLogTime() {
-        if (!task) return;
+    async function handleSaveUpdate() {
+        if (!task || !commentInput.trim()) return;
         const hours = Number(hoursInput);
-        if (!Number.isFinite(hours) || hours <= 0) {
-            setTimeLogSuccess(false);
-            setTimeLogMessage('Enter a number of hours greater than 0.');
-            return;
-        }
         setTimeLogMessage(null);
         setTimeLogSuccess(false);
-        const error = await logTime(task.id, hours);
-        if (error) {
-            setTimeLogMessage(error);
-            return;
+        if (Number.isFinite(hours) && hours > 0) {
+            const error = await logTime(task.id, hours);
+            if (error) {
+                setTimeLogMessage(error);
+                return;
+            }
         }
+        await addComment(task.id, currentUser, commentInput.trim());
         setHoursInput('');
-        setTimeLogSuccess(true);
-        setTimeLogMessage('Time logged successfully.');
-    }
-
-    function handlePostComment() {
-        if (!task) return;
-        if (!commentInput.trim()) return;
-        addComment(task.id, currentUser, commentInput);
         setCommentInput('');
+        setTimeLogSuccess(true);
+        setTimeLogMessage('Update saved successfully.');
     }
 
     return (
@@ -125,19 +117,31 @@ export default function TaskDetailsPage() {
 
             <section className="border bg-white" style={{ borderColor: 'var(--line-soft)', borderRadius: 'var(--radius-md)' }}>
                 <div className="flex flex-wrap items-center justify-between gap-3 border-b px-5 py-4" style={{ borderColor: 'var(--line-soft)' }}>
-                    <div><h2 className="text-sm font-semibold" style={{ color: 'var(--ink)' }}>Time log</h2><p className="mt-1 text-xs" style={{ color: 'var(--text-muted)' }}>Track the work recorded against this task.</p></div>
+                    <div><h2 className="text-sm font-semibold" style={{ color: 'var(--ink)' }}>Log time &amp; updates</h2><p className="mt-1 text-xs" style={{ color: 'var(--text-muted)' }}>Record work and add an update to this task.</p></div>
                     <div className="flex flex-wrap items-center gap-3 font-mono text-xs" style={{ color: 'var(--text-secondary)' }}><span>{taskTimeEntries.length} {taskTimeEntries.length === 1 ? 'entry' : 'entries'}</span><span aria-label="Remaining hours">{Math.max(0, task.estimated_hours - task.worked_hours)}h remaining</span></div>
                 </div>
-                <div className="divide-y" style={{ borderColor: 'var(--line-soft)' }}>
-                    {taskTimeEntries.length === 0 ? <p className="px-5 py-7 text-sm" style={{ color: 'var(--text-muted)' }}>No time entries yet.</p> : taskTimeEntries.map((entry) => <div key={entry.id} className="flex flex-wrap items-center justify-between gap-x-5 gap-y-2 px-5 py-4"><div className="min-w-[12rem] flex-1"><p className="text-sm font-medium" style={{ color: 'var(--ink)' }}>{entry.logged_by}</p><p className="mt-1 text-xs" style={{ color: 'var(--text-muted)' }}>{formatTimeLogTimestamp(entry.logged_at)}</p></div><span className="font-mono text-sm font-medium" style={{ color: 'var(--accent-holiday)' }}>{entry.hours} {entry.hours === 1 ? 'hour' : 'hours'}</span></div>)}
+                <div className="border-b p-4" style={{ borderColor: 'var(--line-soft)', background: 'var(--paper)' }}>
+                    <div className="flex flex-col gap-2">
+                        <div className="flex flex-col gap-2 sm:flex-row">
+                            <label className="sr-only" htmlFor="task-hours">Hours logged</label>
+                            <input id="task-hours" type="number" min="0.1" step="0.1" value={hoursInput} onChange={(e) => setHoursInput(e.target.value)} placeholder="Hours worked (optional)" className="min-w-0 border px-3 py-2 text-sm outline-none sm:w-48" style={inputStyle} />
+                            <label className="sr-only" htmlFor="task-update">Update</label>
+                            <textarea id="task-update" value={commentInput} onChange={(e) => setCommentInput(e.target.value)} rows={3} placeholder="What did you work on?" className="min-w-0 flex-1 resize-none border px-3 py-2 text-sm" style={inputStyle} />
+                        </div>
+                        <button onClick={() => void handleSaveUpdate()} disabled={!commentInput.trim()} className="self-start px-4 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50" style={{ background: 'var(--ink)', color: '#fff', borderRadius: 'var(--radius-sm)' }}>Save</button>
+                    </div>
+                    {timeLogMessage && <p className="mt-2 text-xs" style={{ color: timeLogSuccess ? 'var(--status-present)' : 'var(--status-absent)' }} role="status">{timeLogMessage}</p>}
                 </div>
-                <div className="border-t p-4" style={{ borderColor: 'var(--line-soft)', background: 'var(--paper)' }}><div className="flex flex-col gap-2 sm:flex-row"><label className="sr-only" htmlFor="task-hours">Hours logged</label><input id="task-hours" type="number" min="0.1" step="0.1" value={hoursInput} onChange={(e) => setHoursInput(e.target.value)} placeholder="Hours worked" className="min-w-0 flex-1 border px-3 py-2 text-sm outline-none" style={inputStyle} /><button onClick={() => void handleLogTime()} className="px-4 py-2 text-sm font-medium" style={{ background: 'var(--ink)', color: '#fff', borderRadius: 'var(--radius-sm)' }}>Add time</button></div>{timeLogMessage && <p className="mt-2 text-xs" style={{ color: timeLogSuccess ? 'var(--status-present)' : 'var(--status-absent)' }} role="status">{timeLogMessage}</p>}</div>
-            </section>
-
-            <section className="border bg-white" style={{ borderColor: 'var(--line-soft)', borderRadius: 'var(--radius-md)' }}>
-                <div className="border-b px-5 py-3.5" style={{ borderColor: 'var(--line-soft)' }}><h2 className="text-sm font-semibold" style={{ color: 'var(--ink)' }}>Comments</h2></div>
-                <div className="space-y-4 p-5">{taskComments.length === 0 ? <p className="text-sm" style={{ color: 'var(--text-muted)' }}>No comments yet</p> : taskComments.map((comment) => <div key={comment.id} className="border-l-2 pl-3" style={{ borderColor: 'var(--line-soft)' }}><div className="flex flex-wrap items-center gap-2"><span className="text-sm font-medium" style={{ color: 'var(--ink)' }}>{comment.commenter}</span><span className="text-xs" style={{ color: 'var(--text-muted)' }}>{formatTimestamp(comment.timestamp)}</span></div><p className="mt-1 text-sm" style={{ color: 'var(--text-secondary)' }}>{comment.text}</p></div>)}</div>
-                <div className="border-t p-4" style={{ borderColor: 'var(--line-soft)' }}><textarea value={commentInput} onChange={(e) => setCommentInput(e.target.value)} rows={3} placeholder="Write a comment" className="w-full resize-none border px-3 py-2 text-sm" style={inputStyle} /><button onClick={handlePostComment} className="mt-2 px-3 py-2 text-sm font-medium" style={{ background: 'var(--ink)', color: '#fff', borderRadius: 'var(--radius-sm)' }}>Post Comment</button></div>
+                <div className="border-b" style={{ borderColor: 'var(--line-soft)' }}>
+                    <div className="border-b px-5 py-3.5" style={{ borderColor: 'var(--line-soft)' }}><h3 className="text-sm font-semibold" style={{ color: 'var(--ink)' }}>Time entries</h3></div>
+                    <div className="divide-y" style={{ borderColor: 'var(--line-soft)' }}>
+                        {taskTimeEntries.length === 0 ? <p className="px-5 py-7 text-sm" style={{ color: 'var(--text-muted)' }}>No time entries yet.</p> : taskTimeEntries.map((entry) => <div key={entry.id} className="flex flex-wrap items-center justify-between gap-x-5 gap-y-2 px-5 py-4"><div className="min-w-[12rem] flex-1"><p className="text-sm font-medium" style={{ color: 'var(--ink)' }}>{entry.logged_by}</p><p className="mt-1 text-xs" style={{ color: 'var(--text-muted)' }}>{formatTimeLogTimestamp(entry.logged_at)}</p></div><span className="font-mono text-sm font-medium" style={{ color: 'var(--accent-holiday)' }}>{entry.hours} {entry.hours === 1 ? 'hour' : 'hours'}</span></div>)}
+                    </div>
+                </div>
+                <div>
+                    <div className="border-b px-5 py-3.5" style={{ borderColor: 'var(--line-soft)' }}><h3 className="text-sm font-semibold" style={{ color: 'var(--ink)' }}>Comments</h3></div>
+                    <div className="space-y-4 p-5">{taskComments.length === 0 ? <p className="text-sm" style={{ color: 'var(--text-muted)' }}>No comments yet</p> : taskComments.map((comment) => <div key={comment.id} className="border-l-2 pl-3" style={{ borderColor: 'var(--line-soft)' }}><div className="flex flex-wrap items-center gap-2"><span className="text-sm font-medium" style={{ color: 'var(--ink)' }}>{comment.commenter}</span><span className="text-xs" style={{ color: 'var(--text-muted)' }}>{formatTimestamp(comment.timestamp)}</span></div><p className="mt-1 text-sm" style={{ color: 'var(--text-secondary)' }}>{comment.text}</p></div>)}</div>
+                </div>
             </section>
 
             <section className="border bg-white p-5" style={{ borderColor: 'var(--line-soft)', borderRadius: 'var(--radius-md)' }}>

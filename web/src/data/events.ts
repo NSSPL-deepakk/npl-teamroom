@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import type { Employee } from './employees';
-import { getComputedEmployeeEvents } from './holidays';
+import { getComputedEmployeeEvents, getTodayIso } from './holidays';
 
 export interface CompanyEvent {
   id: string;
@@ -39,7 +39,7 @@ function birthdaysFrom(employees: Employee[]): CompanyEvent[] {
 
 export function useUpcomingEvents(employees: Employee[], limit = 4): CompanyEvent[] {
   return useMemo(() => {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = getTodayIso();
     const all: CompanyEvent[] = [
       ...birthdaysFrom(employees),
       ...anniversariesFrom(employees),

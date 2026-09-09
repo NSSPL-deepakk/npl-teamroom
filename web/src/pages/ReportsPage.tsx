@@ -2,7 +2,6 @@ import { useMemo } from 'react';
 import { useEmployees } from '../data/employees';
 import { useDepartments } from '../data/departments';
 import { useAttendance, requiredHoursForEmployeeMonth, totalHoursForMonth } from '../data/attendance';
-import { useLeaveRequests, leaveDayCount } from '../data/leave';
 import { classifyDay, useHolidays } from '../data/holidays';
 import { StatCard, LedgerPanel } from '../components/Ledger';
 
@@ -11,7 +10,6 @@ export default function ReportsPage() {
   const { departments } = useDepartments();
   const { records } = useAttendance();
   const { holidays } = useHolidays();
-  const { requests } = useLeaveRequests();
 
   const now = new Date();
   const year = now.getFullYear();
@@ -28,23 +26,6 @@ export default function ReportsPage() {
         .sort((a, b) => b.count - a.count),
     [departments, employees],
   );
-
-  const leaveByStatus = useMemo(() => {
-    return {
-      pending: requests.filter((r) => r.status === 'PENDING').length,
-      approved: requests.filter((r) => r.status === 'APPROVED').length,
-      rejected: requests.filter((r) => r.status === 'REJECTED').length,
-    };
-  }, [requests]);
-
-  const leaveDaysByType = useMemo(() => {
-    const totals: Record<string, number> = {};
-    for (const r of requests) {
-      if (r.status !== 'APPROVED') continue;
-      totals[r.type] = (totals[r.type] ?? 0) + leaveDayCount(r);
-    }
-    return Object.entries(totals).sort((a, b) => b[1] - a[1]);
-  }, [requests]);
 
   const offDayWork = useMemo(() => {
     let holidayHours = 0;
@@ -109,53 +90,6 @@ export default function ReportsPage() {
           ))}
         </LedgerPanel>
 
-        <LedgerPanel title="Leave — this year">
-          <div className="grid grid-cols-3 gap-3 px-5 py-4">
-            <div>
-              <p className="font-mono text-[11px] uppercase tracking-wide" style={{ color: 'var(--status-pending)' }}>
-                Pending
-              </p>
-              <p className="font-display mt-1 text-2xl font-semibold" style={{ color: 'var(--ink)' }}>
-                {leaveByStatus.pending}
-              </p>
-            </div>
-            <div>
-              <p className="font-mono text-[11px] uppercase tracking-wide" style={{ color: 'var(--status-present)' }}>
-                Approved
-              </p>
-              <p className="font-display mt-1 text-2xl font-semibold" style={{ color: 'var(--ink)' }}>
-                {leaveByStatus.approved}
-              </p>
-            </div>
-            <div>
-              <p className="font-mono text-[11px] uppercase tracking-wide" style={{ color: 'var(--status-absent)' }}>
-                Rejected
-              </p>
-              <p className="font-display mt-1 text-2xl font-semibold" style={{ color: 'var(--ink)' }}>
-                {leaveByStatus.rejected}
-              </p>
-            </div>
-          </div>
-          <div className="border-t px-5 py-3" style={{ borderColor: 'var(--line-soft)' }}>
-            <p className="font-mono mb-2 text-[11px] uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>
-              Approved days by type
-            </p>
-            {leaveDaysByType.length === 0 ? (
-              <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
-                No approved leave yet.
-              </p>
-            ) : (
-              leaveDaysByType.map(([type, days]) => (
-                <div key={type} className="flex items-center justify-between py-1 text-sm">
-                  <span style={{ color: 'var(--text-secondary)' }}>{type}</span>
-                  <span className="font-mono" style={{ color: 'var(--ink)' }}>
-                    {days} days
-                  </span>
-                </div>
-              ))
-            )}
-          </div>
-        </LedgerPanel>
       </div>
 
       <div className="mt-6">

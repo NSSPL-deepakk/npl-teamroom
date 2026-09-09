@@ -35,14 +35,20 @@ function RequestRow({
   req,
   employeeName,
   showApprove,
+  canDecideAnyStatus,
+  canEdit,
   onApprove,
   onReject,
+  onEdit,
 }: {
   req: LeaveRequest;
   employeeName?: string;
   showApprove?: boolean;
+  canDecideAnyStatus?: boolean;
+  canEdit?: boolean;
   onApprove?: (id: string) => void;
   onReject?: (id: string) => void;
+  onEdit?: (request: LeaveRequest) => void;
 }) {
   const days = leaveDayCount(req);
   return (
@@ -68,7 +74,16 @@ function RequestRow({
         </p>
       </div>
       <StatusTag status={statusOf(req.status)} label={req.status.charAt(0) + req.status.slice(1).toLowerCase()} />
-      {showApprove && req.status === 'PENDING' && (
+      {canEdit && (
+        <button
+          onClick={() => onEdit?.(req)}
+          className="font-mono text-[11px] uppercase tracking-wide hover:underline"
+          style={{ color: 'var(--accent-structure)' }}
+        >
+          Edit
+        </button>
+      )}
+      {showApprove && (canDecideAnyStatus || req.status === 'PENDING') && (
         <div className="flex items-center gap-3">
           <button
             onClick={() => onApprove?.(req.id)}
@@ -94,10 +109,11 @@ export default function LeavePage() {
   const { role } = useOutletContext<Ctx>();
   const { profile } = useAuth();
   const { employees } = useEmployees();
-  const { requests, requestLeave, approve, reject } = useLeaveRequests();
+  const { requests, requestLeave, updateRequest, approve, reject } = useLeaveRequests();
   const employee = profile?.employee_id ? employees.find((item) => item.id === profile.employee_id) ?? null : null;
 
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [editingRequestId, setEditingRequestId] = useState<string | null>(null);
   const [type, setType] = useState<LeaveType>('Casual');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
@@ -142,7 +158,10 @@ export default function LeavePage() {
     e.preventDefault();
     const targetEmployeeId = canApproveOrg ? requestEmployeeId : requestEmployeeId || employee?.id;
     if (!targetEmployeeId || !startDate || !endDate || !reason.trim()) return;
-    const error = await requestLeave(targetEmployeeId, { type, start_date: startDate, end_date: endDate, reason: reason.trim() });
+    const payload = { employee_id: targetEmployeeId, type, start_date: startDate, end_date: endDate, reason: reason.trim() };
+    const error = editingRequestId
+      ? await updateRequest(editingRequestId, payload)
+      : await requestLeave(targetEmployeeId, { type, start_date: startDate, end_date: endDate, reason: reason.trim() });
     if (error) {
       setFormError(error);
       return;
@@ -152,8 +171,31 @@ export default function LeavePage() {
     setEndDate('');
     setReason('');
     setRequestEmployeeId(employee?.id ?? '');
+    setEditingRequestId(null);
     setFormError('');
     setDrawerOpen(false);
+  }
+
+  function openCreateDrawer() {
+    setEditingRequestId(null);
+    setType('Casual');
+    setStartDate('');
+    setEndDate('');
+    setReason('');
+    setRequestEmployeeId(canApproveOrg ? '' : employee?.id ?? '');
+    setFormError('');
+    setDrawerOpen(true);
+  }
+
+  function openEditDrawer(request: LeaveRequest) {
+    setEditingRequestId(request.id);
+    setType(request.type);
+    setStartDate(request.start_date);
+    setEndDate(request.end_date);
+    setReason(request.reason);
+    setRequestEmployeeId(request.employee_id);
+    setFormError('');
+    setDrawerOpen(true);
   }
 
   async function handleDecision(decide: (id: string) => Promise<string | null>, id: string) {
@@ -172,17 +214,13 @@ export default function LeavePage() {
             {employee ? 'My leave' : 'Leave requests'}
           </h1>
         </div>
-        {employee && (
+        {(employee || canApproveOrg) && (
           <button
-            onClick={() => {
-              setRequestEmployeeId(canApproveOrg ? '' : employee?.id ?? '');
-              setFormError('');
-              setDrawerOpen(true);
-            }}
+            onClick={openCreateDrawer}
             className="px-4 py-2.5 text-sm font-medium transition-opacity hover:opacity-90"
             style={{ background: 'var(--ink)', color: 'var(--text-on-ink)', borderRadius: 'var(--radius-sm)' }}
           >
-            + Request leave
+            + Add leave request
           </button>
         )}
       </div>
@@ -250,7 +288,7 @@ export default function LeavePage() {
             </p>
           ) : (
             orgRequests.map((r) => (
-              <RequestRow key={r.id} req={r} employeeName={nameFor(r.employee_id)} showApprove onApprove={(id) => void handleDecision(approve, id)} onReject={(id) => void handleDecision(reject, id)} />
+              <RequestRow key={r.id} req={r} employeeName={nameFor(r.employee_id)} showApprove canDecideAnyStatus={canApproveOrg} canEdit={canApproveOrg} onApprove={(id) => void handleDecision(approve, id)} onReject={(id) => void handleDecision(reject, id)} onEdit={openEditDrawer} />
             ))
           )}
         </div>
@@ -269,7 +307,7 @@ export default function LeavePage() {
 
       {actionError && <p className="mt-4 text-sm" style={{ color: 'var(--status-absent)' }}>{actionError}</p>}
 
-      <Drawer open={drawerOpen} title="Request leave" onClose={() => setDrawerOpen(false)}>
+      <Drawer open={drawerOpen} title={editingRequestId ? 'Edit leave request' : 'Add leave request'} onClose={() => { setDrawerOpen(false); setEditingRequestId(null); }}>
         <form onSubmit={handleSubmit} className="space-y-4">
           {canSubmitForOthers && (
             <Field label="Employee">
@@ -320,7 +358,7 @@ export default function LeavePage() {
             className="w-full py-2.5 text-sm font-medium transition-opacity hover:opacity-90"
             style={{ background: 'var(--ink)', color: 'var(--text-on-ink)', borderRadius: 'var(--radius-sm)' }}
           >
-            Submit request
+            {editingRequestId ? 'Save changes' : 'Submit request'}
           </button>
         </form>
       </Drawer>

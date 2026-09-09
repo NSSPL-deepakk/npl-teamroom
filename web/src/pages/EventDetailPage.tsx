@@ -2,12 +2,13 @@ import { useMemo } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import { useEmployees } from '../data/employees';
-import { formatHolidayDate, getComputedEmployeeEvents, resolveEventImage, useHolidays, type HolidayCategory } from '../data/holidays';
+import { formatHolidayDateTime, getComputedEmployeeEvents, resolveEventImage, useHolidays, type HolidayCategory } from '../data/holidays';
 
 type EventDetailData = {
     id: string;
     name: string;
     date: string;
+    event_time?: string | null;
     category: HolidayCategory | 'Announcement' | 'Birthday' | 'Anniversary';
     description?: string | null;
     image?: string | null;
@@ -47,6 +48,7 @@ export default function EventDetailPage() {
                 id: manual.id,
                 name: manual.name,
                 date: manual.date,
+                event_time: manual.event_time ?? null,
                 category: manual.category,
                 description: manual.description ?? null,
                 image: manual.image ?? null,
@@ -117,7 +119,7 @@ export default function EventDetailPage() {
 
                         <div className="mt-4 space-y-2 text-sm" style={{ color: 'var(--text-secondary)' }}>
                             <p>
-                                <span className="font-medium" style={{ color: 'var(--ink)' }}>Date:</span> {formatHolidayDate(event.date)}
+                                <span className="font-medium" style={{ color: 'var(--ink)' }}>Date:</span> {formatHolidayDateTime(event.date, event.event_time)}
                             </p>
                             <p>
                                 <span className="font-medium" style={{ color: 'var(--ink)' }}>Type:</span> {event.kind ?? 'Event'}
