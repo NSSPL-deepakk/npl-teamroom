@@ -20,6 +20,7 @@ import PlaceholderPage from './pages/PlaceholderPage';
 import EventDetailPage from './pages/EventDetailPage';
 import EmployeeAttendanceDetailPage from './pages/EmployeeAttendanceDetailPage';
 import RecruitmentPage from './pages/RecruitmentPage';
+import JobOpeningDetailPage from './pages/JobOpeningDetailPage';
 import OnboardingPage from './pages/OnboardingPage';
 import AppShell from './layouts/AppShell';
 import ProtectedRoute, { RoleProtectedRoute } from './components/ProtectedRoute';
@@ -63,6 +64,7 @@ export default function App() {
           <Route path="tasks/:id" element={<TaskDetailsPage />} />
           <Route path="users" element={<UsersPage />} />
           <Route path="recruitment" element={<RecruitmentPage />} />
+          <Route path="recruitment/jobs/:id" element={<JobOpeningDetailPage />} />
           <Route path="candidates" element={<RecruitmentPage />} />
           <Route path="onboarding" element={<OnboardingPage />} />
           <Route path="*" element={<PlaceholderPage />} />

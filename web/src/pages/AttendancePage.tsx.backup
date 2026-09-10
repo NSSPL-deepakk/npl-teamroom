@@ -18,6 +18,7 @@ import { useLeaveRequests } from '../data/leave';
 import type { Role } from '../data/roles';
 import { ChevronRight } from 'lucide-react';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { Drawer } from '../components/Drawer';
 
 type Ctx = { role: Role };
 
@@ -27,7 +28,7 @@ type LocationState =
   | { status: 'done'; coords: { latitude: number; longitude: number } | null };
 
 type ApprovalAction = { id: string; action: 'approve' | 'reject' } | null;
-type AttendanceMetric = 'all' | 'present' | 'absent' | 'leave' | 'holiday' | 'wfh' | 'late';
+type AttendanceMetric = 'present' | 'absent' | 'leave' | 'wfh' | 'late';
 
 const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 const WORK_MODES: WorkMode[] = ['OFFICE', 'WFH', 'HYBRID'];
@@ -52,8 +53,8 @@ export default function AttendancePage() {
   const { departments } = useDepartments();
   const { designations } = useDesignations();
   const { holidays } = useHolidays();
-  const { requests: leaveRequests, refresh: refreshLeaveRequests } = useLeaveRequests();
-  const { records, checkIn, checkOut, addManualEntry, approveRecord, rejectRecord, today, loading, error, refresh: refreshAttendance } = useAttendance();
+  const { requests: leaveRequests } = useLeaveRequests();
+  const { records, checkIn, checkOut, addManualEntry, approveRecord, rejectRecord, today, loading, error } = useAttendance();
 
   const isHRAdmin = role === 'HR' || role === 'SUPER_ADMIN';
   const [viewMode, setViewMode] = useState<'my' | 'employee'>('my');
@@ -283,38 +284,6 @@ export default function AttendancePage() {
   ];
 
   const isSuperAdmin = role === 'SUPER_ADMIN';
-
-  const todayDetailRows = useMemo(() => employees.map((employee) => {
-    const sessions = records
-      .filter((record) => record.employee_id === employee.id && record.date === selectedDate)
-      .sort((a, b) => (a.check_in ?? '').localeCompare(b.check_in ?? ''));
-    const sessionsWithCheckIn = sessions.filter((session) => session.check_in);
-    const firstSession = sessionsWithCheckIn[0] ?? sessions[0] ?? null;
-    const lastSession = [...sessionsWithCheckIn].reverse()[0] ?? null;
-    const approvedLeave = leaveRequests.some((request) => request.employee_id === employee.id && request.status === 'APPROVED' && selectedDate >= request.start_date && selectedDate <= request.end_date);
-    const present = sessionsWithCheckIn.length > 0;
-    const holiday = classifyDay(selectedDate, holidays) === 'HOLIDAY';
-    const late = sessionsWithCheckIn.some((session) => session.check_in! > '09:15');
-    const workedMinutes = sessions.reduce((sum, session) => sum + minutesBetween(session.check_in, session.check_out ?? session.check_in), 0);
-    const department = departments.find((item) => item.id === employee.department_id)?.name ?? 'Unknown';
-    const designation = designations.find((item) => item.id === employee.designation_id)?.name ?? 'Designation unavailable';
-    return {
-      employee,
-      department,
-      designation,
-      sessions,
-      firstSession,
-      lastSession,
-      approvedLeave,
-      present,
-      holiday,
-      late,
-      wfh: present && sessionsWithCheckIn.some((session) => session.work_mode === 'WFH'),
-      workedMinutes,
-      status: approvedLeave ? 'On leave' : present ? (late ? 'Late' : 'Present') : holiday ? 'Holiday' : 'Absent',
-    };
-  }), [employees, records, selectedDate, leaveRequests, holidays, departments, designations]);
-
   const organizationAllRows = useMemo(() => {
     const monthPrefix = `${year}-${String(month).padStart(2, '0')}`;
     const monthEnd = `${monthPrefix}-${String(new Date(year, month, 0).getDate()).padStart(2, '0')}`;
@@ -335,6 +304,35 @@ export default function AttendancePage() {
       });
   }, [employees, records, year, month, today, holidays, leaveRequests]);
 
+  const todayDetailRows = useMemo(() => employees.map((employee) => {
+    const sessions = records
+      .filter((record) => record.employee_id === employee.id && record.date === today)
+      .sort((a, b) => (a.check_in ?? '').localeCompare(b.check_in ?? ''));
+    const sessionsWithCheckIn = sessions.filter((session) => session.check_in);
+    const firstSession = sessionsWithCheckIn[0] ?? sessions[0] ?? null;
+    const lastSession = [...sessionsWithCheckIn].reverse()[0] ?? null;
+    const approvedLeave = leaveRequests.some((request) => request.employee_id === employee.id && request.status === 'APPROVED' && today >= request.start_date && today <= request.end_date);
+    const present = sessionsWithCheckIn.length > 0;
+    const late = sessionsWithCheckIn.some((session) => session.check_in! > '09:15');
+    const workedMinutes = sessions.reduce((sum, session) => sum + minutesBetween(session.check_in, session.check_out ?? session.check_in), 0);
+    const department = departments.find((item) => item.id === employee.department_id)?.name ?? 'Unknown';
+    const designation = designations.find((item) => item.id === employee.designation_id)?.name ?? 'Designation unavailable';
+    return {
+      employee,
+      department,
+      designation,
+      sessions,
+      firstSession,
+      lastSession,
+      approvedLeave,
+      present,
+      late,
+      wfh: present && sessionsWithCheckIn.some((session) => session.work_mode === 'WFH'),
+      workedMinutes,
+      status: approvedLeave ? 'On leave' : present ? (late ? 'Late' : 'Present') : 'Absent',
+    };
+  }), [employees, records, today, leaveRequests, departments]);
+
   const organizationRows = useMemo(() => organizationAllRows.filter((row) => {
     const search = searchTerm.trim().toLowerCase();
     const managerOk = managerFilter === 'ALL' || row.employee.manager_id === managerFilter;
@@ -349,7 +347,6 @@ export default function AttendancePage() {
     const activeEmployees = employees;
     const present = todayDetailRows.filter((row) => row.present);
     const leave = todayDetailRows.filter((row) => row.approvedLeave);
-    const holiday = todayDetailRows.filter((row) => row.holiday && !row.present && !row.approvedLeave);
     const rows = organizationAllRows;
     const requiredMinutes = rows.reduce((sum, row) => sum + row.requiredMinutes, 0);
     const workedMinutes = rows.reduce((sum, row) => sum + row.workedMinutes, 0);
@@ -358,9 +355,8 @@ export default function AttendancePage() {
     return {
       totalEmployees: activeEmployees.length,
       presentToday: present.length,
-      absentToday: Math.max(0, activeEmployees.length - present.length - leave.length - holiday.length),
+      absentToday: Math.max(0, activeEmployees.length - present.length - leave.length),
       onLeave: leave.length,
-      holiday: holiday.length,
       wfh: todayDetailRows.filter((row) => row.wfh).length,
       late: todayDetailRows.filter((row) => row.late).length,
       requiredMinutes,
@@ -374,41 +370,22 @@ export default function AttendancePage() {
   const titleEmployee = targetEmployee ?? currentEmployee;
   const approvalMessage = approvalAction?.action === 'approve' ? 'Are you sure you want to approve this record?' : 'Are you sure you want to reject this record?';
 
-  async function handleMetricSelect(metric: AttendanceMetric) {
-    await Promise.all([refreshAttendance(), refreshLeaveRequests()]);
-    setSelectedMetric(metric === 'all' ? null : metric);
-  }
-
-  const overviewRows = useMemo(() => todayDetailRows.filter((row) => {
-    const search = searchTerm.trim().toLowerCase();
-    const metricOk = selectedMetric === null || selectedMetric === 'all'
-      || (selectedMetric === 'present' && row.present)
-      || (selectedMetric === 'absent' && !row.present && !row.approvedLeave && !row.holiday)
-      || (selectedMetric === 'leave' && row.approvedLeave)
-      || (selectedMetric === 'holiday' && row.holiday && !row.present && !row.approvedLeave)
-      || (selectedMetric === 'wfh' && row.wfh)
-      || (selectedMetric === 'late' && row.late);
-    return metricOk
-      && (departmentFilter === 'ALL' || row.employee.department_id === departmentFilter)
-      && (managerFilter === 'ALL' || row.employee.manager_id === managerFilter)
-      && (organizationWorkMode === 'ALL' || row.employee.work_mode === organizationWorkMode)
-      && (statusFilter === 'ALL' || row.status === statusFilter)
-      && (!search || row.employee.name.toLowerCase().includes(search));
-  }), [todayDetailRows, selectedMetric, departmentFilter, managerFilter, organizationWorkMode, statusFilter, searchTerm]);
-
   if (loading) return <div className="p-6 text-sm" style={{ color: 'var(--text-secondary)' }}>Loading attendance…</div>;
   if (error) return <div className="border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-800">{error}</div>;
 
   if (isSuperAdmin) {
     const metricCards = [
-      ['Total Employees', organizationMetrics.totalEmployees, 'var(--ink)', 'all'],
-      ['Present', organizationMetrics.presentToday, 'var(--status-present)', 'present'],
-      ['Absent', organizationMetrics.absentToday, 'var(--status-absent)', 'absent'],
+      ['Total Employees', organizationMetrics.totalEmployees, 'var(--ink)', null],
+      ['Present Today', organizationMetrics.presentToday, 'var(--status-present)', 'present'],
+      ['Absent Today', organizationMetrics.absentToday, 'var(--status-absent)', 'absent'],
       ['On Leave', organizationMetrics.onLeave, '#F59E0B', 'leave'],
-      ['Holiday', organizationMetrics.holiday, 'var(--accent-holiday)', 'holiday'],
       ['WFH', organizationMetrics.wfh, 'var(--accent-structure)', 'wfh'],
-      ['Late', organizationMetrics.late, '#B45309', 'late'],
+      ['Late Today', organizationMetrics.late, '#B45309', 'late'],
     ] as const;
+    const selectedEmployees = selectedMetric
+      ? todayDetailRows.filter((row) => selectedMetric === 'present' ? row.present : selectedMetric === 'absent' ? !row.present && !row.approvedLeave : selectedMetric === 'leave' ? row.approvedLeave : selectedMetric === 'wfh' ? row.wfh : row.late)
+      : [];
+    const selectedLabel = selectedMetric === 'present' ? 'Present Today' : selectedMetric === 'absent' ? 'Absent Today' : selectedMetric === 'leave' ? 'On Leave' : selectedMetric === 'wfh' ? 'WFH' : 'Late Today';
 
     return (
       <div className="space-y-6">
@@ -419,7 +396,7 @@ export default function AttendancePage() {
             <p className="mt-1 text-sm" style={{ color: 'var(--text-secondary)' }}>Monitor and manage attendance across all employees</p>
           </div>
           <div className="inline-flex items-center rounded-md border p-1" style={{ borderColor: 'var(--line-soft)', background: 'var(--paper)' }}>
-            {['Overview', 'Monthly Employees Attendance'].map((label) => {
+            {['Overview', 'Employee Attendance', 'Attendance Requests'].map((label) => {
               const section = label === 'Overview' ? 'overview' : 'employees';
               return <button key={label} onClick={() => { if (label !== 'Attendance Requests') setSuperAdminSection(section); }} className="px-3 py-1.5 text-xs font-medium" style={{ background: (superAdminSection === section && label !== 'Attendance Requests') ? 'var(--ink)' : 'transparent', color: (superAdminSection === section && label !== 'Attendance Requests') ? '#fff' : 'var(--ink)', borderRadius: 'var(--radius-sm)' }}>
                 {label}
@@ -431,236 +408,29 @@ export default function AttendancePage() {
         <div className="flex flex-wrap items-center justify-between gap-3 border bg-white p-4" style={{ borderColor: 'var(--line-soft)', borderRadius: 'var(--radius-md)' }}>
           <p className="font-mono text-xs uppercase tracking-wide" style={{ color: 'var(--text-secondary)' }}>{monthLabel}</p>
           <div className="flex gap-2">
-            <input type="date" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} className="border px-2.5 py-2 text-sm" style={{ borderColor: 'var(--line)', borderRadius: 'var(--radius-sm)' }} aria-label="Attendance date" />
             <select value={month} onChange={(e) => setMonth(Number(e.target.value))} className="border px-2.5 py-2 text-sm" style={{ borderColor: 'var(--line)', borderRadius: 'var(--radius-sm)' }}>{MONTH_NAMES.map((name, index) => <option key={name} value={index + 1}>{name}</option>)}</select>
             <select value={year} onChange={(e) => setYear(Number(e.target.value))} className="border px-2.5 py-2 text-sm" style={{ borderColor: 'var(--line)', borderRadius: 'var(--radius-sm)' }}>{Array.from({ length: 5 }, (_, index) => new Date().getFullYear() - 2 + index).map((value) => <option key={value} value={value}>{value}</option>)}</select>
           </div>
         </div>
 
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
-          {metricCards.map(([label, value, color, metric]) => <button key={label} type="button" onClick={() => { void handleMetricSelect(metric); }} aria-pressed={selectedMetric === metric || (metric === 'all' && selectedMetric === null)} className="relative cursor-pointer overflow-hidden border bg-white p-4 text-left transition-shadow hover:shadow-sm" style={{ borderColor: selectedMetric === metric || (metric === 'all' && selectedMetric === null) ? color : 'var(--line-soft)', borderRadius: 'var(--radius-sm)', boxShadow: selectedMetric === metric || (metric === 'all' && selectedMetric === null) ? `inset 0 -2px 0 ${color}` : undefined }}><span className="absolute inset-y-0 left-0 w-1" style={{ background: color }} /><p className="pl-2 font-mono text-[10px] uppercase tracking-wide" style={{ color: 'var(--text-secondary)' }}>{label}</p><p className="mt-2 pl-2 text-2xl font-semibold tabular" style={{ color }}>{value}</p></button>)}
+          {metricCards.map(([label, value, color, metric]) => <button key={label} type="button" onClick={() => metric && setSelectedMetric(metric)} className={`relative overflow-hidden border bg-white p-4 text-left ${metric ? 'cursor-pointer transition-shadow hover:shadow-sm' : ''}`} style={{ borderColor: 'var(--line-soft)', borderRadius: 'var(--radius-sm)' }}><span className="absolute inset-y-0 left-0 w-1" style={{ background: color }} /><p className="pl-2 font-mono text-[10px] uppercase tracking-wide" style={{ color: 'var(--text-secondary)' }}>{label}</p><p className="mt-2 pl-2 text-2xl font-semibold tabular" style={{ color }}>{value}</p></button>)}
         </div>
-        {selectedMetric && <div className="flex items-center justify-between gap-3 border bg-white px-4 py-3 text-sm" style={{ borderColor: 'var(--line-soft)', borderRadius: 'var(--radius-sm)' }}><span style={{ color: 'var(--text-secondary)' }}>Showing {metricCards.find(([, , , metric]) => metric === selectedMetric)?.[0] ?? 'matching'} employees for {selectedDate}.</span><button type="button" onClick={() => { void handleMetricSelect('all'); }} className="border px-3 py-1.5 text-xs font-medium transition-colors hover:bg-[var(--paper)]" style={{ borderColor: 'var(--line)', borderRadius: 'var(--radius-sm)', color: 'var(--ink)' }}>Clear filter</button></div>}
 
-        {/* UPDATED: Organization Overview Table - TODAY'S ATTENDANCE DETAILS */}
+        <Drawer open={selectedMetric !== null} title={selectedLabel} onClose={() => setSelectedMetric(null)}>
+          <p className="mb-4 text-xs" style={{ color: 'var(--text-secondary)' }}>{selectedEmployees.length} employee{selectedEmployees.length === 1 ? '' : 's'} · {today}</p>
+          {selectedEmployees.length === 0 ? <p className="text-sm" style={{ color: 'var(--text-muted)' }}>No matching employees today.</p> : <div className="space-y-4">{selectedEmployees.map((row) => <div key={row.employee.id} className="border-b pb-4 last:border-b-0" style={{ borderColor: 'var(--line-soft)' }}><p className="font-medium" style={{ color: 'var(--ink)' }}>{row.employee.name}</p><p className="mt-1 text-xs" style={{ color: 'var(--text-secondary)' }}>{row.designation} · {row.department} · {row.status}</p>{selectedMetric === 'present' ? <div className="mt-3 grid grid-cols-2 gap-3 text-xs"><span>Check-in<br /><strong>{row.firstSession?.check_in ?? '—'}</strong></span><span>Check-out<br /><strong>{row.lastSession?.check_out ?? '—'}</strong></span><span>Work time<br /><strong>{formatMinutes(row.workedMinutes)}</strong></span><span>Work mode<br /><strong>{row.firstSession?.work_mode ?? '—'}</strong></span><span>Entry type<br /><strong>{row.firstSession?.is_manual_entry ? 'Manual' : 'Automatic'}</strong></span><span>Manual reason<br /><strong>{row.firstSession?.manual_entry_reason ?? '—'}</strong></span></div> : <p className="mt-2 text-xs" style={{ color: 'var(--text-secondary)' }}>{selectedMetric === 'leave' ? 'Approved leave today' : selectedMetric === 'wfh' ? `Work mode: ${row.firstSession?.work_mode ?? 'WFH'}` : selectedMetric === 'late' ? `Check-in: ${row.firstSession?.check_in ?? '—'}` : 'No check-in recorded today'}</p>}</div>)}</div>}
+        </Drawer>
+
         <div className="border bg-white" style={{ borderColor: 'var(--line-soft)', borderRadius: 'var(--radius-md)' }}>
-          <div className="border-b p-4" style={{ borderColor: 'var(--line-soft)' }}>
-            <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-5">
-              <input
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Search employee"
-                className="border px-3 py-2 text-sm"
-                style={{ borderColor: 'var(--line)', borderRadius: 'var(--radius-sm)' }}
-              />
-              <select
-                value={departmentFilter}
-                onChange={(e) => setDepartmentFilter(e.target.value)}
-                className="border px-3 py-2 text-sm"
-                style={{ borderColor: 'var(--line)', borderRadius: 'var(--radius-sm)' }}
-              >
-                <option value="ALL">All departments</option>
-                {departments.map((department) => (
-                  <option key={department.id} value={department.id}>{department.name}</option>
-                ))}
-              </select>
-              <select
-                value={managerFilter}
-                onChange={(e) => setManagerFilter(e.target.value)}
-                className="border px-3 py-2 text-sm"
-                style={{ borderColor: 'var(--line)', borderRadius: 'var(--radius-sm)' }}
-              >
-                <option value="ALL">All teams / managers</option>
-                {employees.filter((emp) => !emp.manager_id).map((manager) => (
-                  <option key={manager.id} value={manager.id}>{manager.name}</option>
-                ))}
-              </select>
-              <select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                className="border px-3 py-2 text-sm"
-                style={{ borderColor: 'var(--line)', borderRadius: 'var(--radius-sm)' }}
-              >
-                <option value="ALL">All attendance statuses</option>
-                <option value="On leave">On leave</option>
-                <option value="Present">Present</option>
-                <option value="Late">Late</option>
-                <option value="Absent">Absent</option>
-                <option value="Holiday">Holiday</option>
-              </select>
-              <select
-                value={organizationWorkMode}
-                onChange={(e) => setOrganizationWorkMode(e.target.value as 'ALL' | WorkMode)}
-                className="border px-3 py-2 text-sm"
-                style={{ borderColor: 'var(--line)', borderRadius: 'var(--radius-sm)' }}
-              >
-                <option value="ALL">All work modes</option>
-                <option value="OFFICE">Office</option>
-                <option value="WFH">WFH</option>
-                <option value="HYBRID">Hybrid</option>
-              </select>
-            </div>
-          </div>
-
-          {superAdminSection === 'overview' ? (
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[1200px] text-left">
-                <thead>
-                  <tr style={{ background: 'var(--paper)' }}>
-                    {['Employee', 'Department', 'Check-in', 'Check-out', 'Hours Worked', 'Status', 'Work Mode', 'Manual Entry Reason'].map((heading) => (
-                      <th
-                        key={heading}
-                        className="px-5 py-3 text-xs uppercase tracking-wide"
-                        style={{ color: 'var(--text-secondary)' }}
-                      >
-                        {heading}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {overviewRows.map((row) => {
-                    // Status color mapping
-                    const statusColor =
-                      row.status === 'On leave' ? '#F59E0B' :
-                        row.status === 'Present' ? '#22C55E' :
-                          row.status === 'Late' ? '#B45309' :
-                            row.status === 'Holiday' ? 'var(--accent-holiday)' :
-                              '#EF4444'; // Absent
-
-                    const statusBgColor =
-                      row.status === 'On leave' ? '#FEF3C7' :
-                        row.status === 'Present' ? '#DCFCE7' :
-                          row.status === 'Late' ? '#FEF3C7' :
-                            row.status === 'Holiday' ? 'var(--paper)' :
-                              '#FEE2E2'; // Absent
-
-                    return (
-                      <tr
-                        key={row.employee.id}
-                        onClick={() => navigate(`/attendance/${row.employee.id}?month=${month}&year=${year}`)}
-                        className="cursor-pointer border-t transition-colors hover:bg-[var(--paper)]"
-                        style={{ borderColor: 'var(--line-soft)' }}
-                      >
-                        {/* Employee Name */}
-                        <td className="px-5 py-3 text-sm font-medium" style={{ color: 'var(--ink)' }}>
-                          {row.employee.name}
-                        </td>
-
-                        {/* Department */}
-                        <td className="px-5 py-3 text-sm" style={{ color: 'var(--text-secondary)' }}>
-                          {departments.find((d) => d.id === row.employee.department_id)?.name ?? 'Unknown'}
-                        </td>
-
-                        {/* Check-in Time */}
-                        <td
-                          className="px-5 py-3 font-mono text-xs"
-                          style={{ color: row.present ? 'var(--ink)' : 'var(--text-muted)' }}
-                        >
-                          {row.firstSession?.check_in ?? '—'}
-                        </td>
-
-                        {/* Check-out Time */}
-                        <td
-                          className="px-5 py-3 font-mono text-xs"
-                          style={{ color: row.lastSession?.check_out ? 'var(--ink)' : 'var(--text-muted)' }}
-                        >
-                          {row.lastSession?.check_out ?? '—'}
-                        </td>
-
-                        {/* Hours Worked */}
-                        <td className="px-5 py-3 font-mono text-xs" style={{ color: 'var(--ink)' }}>
-                          {formatMinutes(row.workedMinutes)}
-                        </td>
-
-                        {/* Status Badge */}
-                        <td className="px-5 py-3">
-                          <span
-                            className="font-mono px-2 py-1 text-[10px] uppercase font-medium"
-                            style={{
-                              background: statusBgColor,
-                              color: statusColor,
-                              borderRadius: 'var(--radius-sm)'
-                            }}
-                          >
-                            {row.status}
-                          </span>
-                        </td>
-
-                        {/* Work Mode */}
-                        <td className="px-5 py-3 text-xs" style={{ color: 'var(--text-secondary)' }}>
-                          {row.firstSession?.work_mode ?? '—'}
-                        </td>
-
-                        {/* Manual Entry Reason */}
-                        <td
-                          className="px-5 py-3 text-xs truncate max-w-xs"
-                          style={{ color: row.firstSession?.manual_entry_reason ? 'var(--ink)' : 'var(--text-muted)' }}
-                          title={row.firstSession?.manual_entry_reason ?? undefined}
-                        >
-                          {row.firstSession?.manual_entry_reason ?? '—'}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                  {overviewRows.length === 0 && <tr><td colSpan={8} className="px-5 py-10 text-center text-sm" style={{ color: 'var(--text-muted)' }}>No employees match the selected filter.</td></tr>}
-                </tbody>
-              </table>
-            </div>
-          ) : null}
-
-          {/* Employee Attendance Section (Monthly View) */}
-          {superAdminSection === 'employees' ? (
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[980px] text-left">
-                <thead>
-                  <tr style={{ background: 'var(--paper)' }}>
-                    {['Employee', 'Department', 'Required', 'Worked', 'Overtime', 'Shortfall', 'Attendance', ''].map((heading) => (
-                      <th key={heading} className="px-5 py-3 text-xs uppercase tracking-wide" style={{ color: 'var(--text-secondary)' }}>
-                        {heading}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {organizationRows.map((row) => (
-                    <tr
-                      key={row.employee.id}
-                      onClick={() => navigate(`/attendance/${row.employee.id}?month=${month}&year=${year}`)}
-                      className="cursor-pointer border-t transition-colors hover:bg-[var(--paper)]"
-                      style={{ borderColor: 'var(--line-soft)' }}
-                    >
-                      <td className="px-5 py-3 text-sm font-medium" style={{ color: 'var(--ink)' }}>
-                        {row.employee.name}
-                      </td>
-                      <td className="px-5 py-3 text-sm" style={{ color: 'var(--text-secondary)' }}>
-                        {departments.find((department) => department.id === row.employee.department_id)?.name ?? 'Unknown'}
-                      </td>
-                      <td className="px-5 py-3 font-mono text-xs">{formatMinutes(row.requiredMinutes)}</td>
-                      <td className="px-5 py-3 font-mono text-xs">{formatMinutes(row.workedMinutes)}</td>
-                      <td className="px-5 py-3 font-mono text-xs" style={{ color: row.overtime > 0 ? 'var(--status-present)' : 'var(--text-muted)' }}>
-                        {formatMinutes(row.overtime)}
-                      </td>
-                      <td className="px-5 py-3 font-mono text-xs" style={{ color: row.shortfall > 0 ? 'var(--status-absent)' : 'var(--text-muted)' }}>
-                        {formatMinutes(row.shortfall)}
-                      </td>
-                      <td className="px-5 py-3">
-                        <span className="font-mono text-xs font-semibold" style={{ color: row.attendance >= 90 ? 'var(--status-present)' : 'var(--status-absent)' }}>
-                          {row.attendance.toFixed(1)}%
-                        </span>
-                        <span className="ml-2 text-[10px] uppercase" style={{ color: row.todayStatus === 'LEAVE' ? '#F59E0B' : row.todayStatus === 'UPCOMING' ? 'var(--text-muted)' : 'var(--text-secondary)' }}>
-                          {row.todayStatus}
-                        </span>
-                      </td>
-                      <td className="px-5 py-3 text-right">
-                        <ChevronRight size={16} strokeWidth={1.75} style={{ color: 'var(--text-muted)' }} />
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : null}
+          <div className="border-b p-4" style={{ borderColor: 'var(--line-soft)' }}><div className="grid gap-3 md:grid-cols-3 xl:grid-cols-5">
+            <input value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Search employee" className="border px-3 py-2 text-sm" style={{ borderColor: 'var(--line)', borderRadius: 'var(--radius-sm)' }} />
+            <select value={departmentFilter} onChange={(e) => setDepartmentFilter(e.target.value)} className="border px-3 py-2 text-sm" style={{ borderColor: 'var(--line)', borderRadius: 'var(--radius-sm)' }}><option value="ALL">All departments</option>{departments.map((department) => <option key={department.id} value={department.id}>{department.name}</option>)}</select>
+            <select value={managerFilter} onChange={(e) => setManagerFilter(e.target.value)} className="border px-3 py-2 text-sm" style={{ borderColor: 'var(--line)', borderRadius: 'var(--radius-sm)' }}><option value="ALL">All teams / managers</option>{employees.filter((emp) => !emp.manager_id).map((manager) => <option key={manager.id} value={manager.id}>{manager.name}</option>)}</select>
+            <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="border px-3 py-2 text-sm" style={{ borderColor: 'var(--line)', borderRadius: 'var(--radius-sm)' }}><option value="ALL">All attendance statuses</option><option value="PRESENT">Present</option><option value="ABSENT">Absent</option><option value="LEAVE">On leave</option><option value="UPCOMING">Upcoming</option></select>
+            <select value={organizationWorkMode} onChange={(e) => setOrganizationWorkMode(e.target.value as 'ALL' | WorkMode)} className="border px-3 py-2 text-sm" style={{ borderColor: 'var(--line)', borderRadius: 'var(--radius-sm)' }}><option value="ALL">All work modes</option><option value="OFFICE">Office</option><option value="WFH">WFH</option><option value="HYBRID">Hybrid</option></select>
+          </div></div>
+          {superAdminSection === 'employees' || superAdminSection === 'overview' ? <div className="overflow-x-auto"><table className="w-full min-w-[980px] text-left"><thead><tr style={{ background: 'var(--paper)' }}>{['Employee', 'Department', 'Required', 'Worked', 'Overtime', 'Shortfall', 'Attendance', ''].map((heading) => <th key={heading} className="px-5 py-3 text-xs uppercase tracking-wide" style={{ color: 'var(--text-secondary)' }}>{heading}</th>)}</tr></thead><tbody>{organizationRows.map((row) => <tr key={row.employee.id} onClick={() => navigate(`/attendance/${row.employee.id}?month=${month}&year=${year}`)} className="cursor-pointer border-t transition-colors hover:bg-[var(--paper)]" style={{ borderColor: 'var(--line-soft)' }}><td className="px-5 py-3 text-sm font-medium" style={{ color: 'var(--ink)' }}>{row.employee.name}</td><td className="px-5 py-3 text-sm" style={{ color: 'var(--text-secondary)' }}>{departments.find((department) => department.id === row.employee.department_id)?.name ?? 'Unknown'}</td><td className="px-5 py-3 font-mono text-xs">{formatMinutes(row.requiredMinutes)}</td><td className="px-5 py-3 font-mono text-xs">{formatMinutes(row.workedMinutes)}</td><td className="px-5 py-3 font-mono text-xs" style={{ color: row.overtime > 0 ? 'var(--status-present)' : 'var(--text-muted)' }}>{formatMinutes(row.overtime)}</td><td className="px-5 py-3 font-mono text-xs" style={{ color: row.shortfall > 0 ? 'var(--status-absent)' : 'var(--text-muted)' }}>{formatMinutes(row.shortfall)}</td><td className="px-5 py-3"><span className="font-mono text-xs font-semibold" style={{ color: row.attendance >= 90 ? 'var(--status-present)' : 'var(--status-absent)' }}>{row.attendance.toFixed(1)}%</span><span className="ml-2 text-[10px] uppercase" style={{ color: row.todayStatus === 'LEAVE' ? '#F59E0B' : row.todayStatus === 'UPCOMING' ? 'var(--text-muted)' : 'var(--text-secondary)' }}>{row.todayStatus}</span></td><td className="px-5 py-3 text-right"><ChevronRight size={16} strokeWidth={1.75} style={{ color: 'var(--text-muted)' }} /></td></tr>)}</tbody></table></div> : null}
         </div>
       </div>
     );
@@ -711,7 +481,7 @@ export default function AttendancePage() {
                 borderRadius: 'var(--radius-sm)',
               }}
             >
-             Monthly Employees Attendance
+              Employee Attendance
             </button>
           </div>
         )}

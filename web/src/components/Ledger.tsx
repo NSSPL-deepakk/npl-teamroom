@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 type Status = 'present' | 'pending' | 'absent' | 'neutral' | 'structure' | 'holiday';
 
@@ -28,15 +29,31 @@ export function StatCard({
   label,
   value,
   status = 'neutral',
+  onClick,
 }: {
   label: string;
   value: string | number;
   status?: Status;
+  onClick?: () => void;
 }) {
   const s = STATUS_STYLE[status];
+  const navigate = useNavigate();
+  const recruitmentRoute = {
+    'Open positions': '/recruitment?openingStatus=OPEN',
+    'Total candidates': '/candidates?filter=all',
+    'Interviews scheduled': '/candidates?filter=interviews',
+    'Offers sent': '/candidates?filter=OFFER_SENT',
+    'Hired candidates': '/candidates?filter=HIRED',
+    'Positions closed': '/recruitment?openingStatus=CLOSED',
+  }[label];
+  const handleClick = onClick ?? (recruitmentRoute ? () => navigate(recruitmentRoute) : undefined);
   return (
     <div
-      className="relative overflow-hidden border bg-white px-5 py-4"
+      role={handleClick ? 'button' : undefined}
+      tabIndex={handleClick ? 0 : undefined}
+      onClick={handleClick}
+      onKeyDown={(event) => { if (handleClick && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); handleClick(); } }}
+      className={`relative overflow-hidden border bg-white px-5 py-4 ${handleClick ? 'cursor-pointer transition-shadow hover:shadow-sm' : ''}`}
       style={{ borderColor: 'var(--line-soft)', borderRadius: 'var(--radius-md)' }}
     >
       <span className="absolute left-0 top-0 h-full w-[3px]" style={{ background: s.color }} />

@@ -385,5 +385,5 @@ export function useAttendance() {
   const approveRecord = useCallback((recordId: string) => updateApproval(recordId, 'approved'), [updateApproval]);
   const rejectRecord = useCallback((recordId: string) => updateApproval(recordId, 'rejected'), [updateApproval]);
 
-  return { records, checkIn, checkOut, addManualEntry, updateAttendanceRecord, approveRecord, rejectRecord, audit, today: today(), loading, error };
+  return { records, checkIn, checkOut, addManualEntry, updateAttendanceRecord, approveRecord, rejectRecord, audit, today: today(), loading, error, refresh };
 }

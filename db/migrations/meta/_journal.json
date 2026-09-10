@@ -120,6 +120,20 @@
       "when": 1787871600000,
       "tag": "0018_company_document_manager_visibility",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1789014000000,
+      "tag": "0020_recruitment",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1789017600000,
+      "tag": "0021_onboarding_workflow",
+      "breakpoints": true
     }
   ]
 }

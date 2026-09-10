@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { supabase } from '../lib/supabase';
 
 export type OpeningStatus = 'OPEN' | 'PAUSED' | 'CLOSED';
 export type EmploymentType = 'Full-time' | 'Part-time' | 'Contract' | 'Internship';
@@ -6,6 +7,7 @@ export type CandidateStage = 'APPLIED' | 'SCREENING' | 'SHORTLISTED' | 'INTERVIE
 
 export interface JobOpening {
     id: string;
+    job_code: string;
     title: string;
     department: string;
     hiring_manager: string;
@@ -31,58 +33,142 @@ export interface Candidate {
     feedback: string;
 }
 
-const OPENINGS_KEY = 'roster.recruitment.openings';
-const CANDIDATES_KEY = 'roster.recruitment.candidates';
+export interface Interview {
+    id: string;
+    candidate_id: string;
+    scheduled_at: string;
+    status: 'SCHEDULED' | 'COMPLETED' | 'CANCELLED';
+    notes: string;
+}
 
-const SEED_OPENINGS: JobOpening[] = [
-    { id: 'job-1', title: 'Senior Frontend Engineer', department: 'Engineering', hiring_manager: 'Vikram Joshi', positions: 2, employment_type: 'Full-time', experience: '4-7 years', location: 'Ludhiana / Hybrid', description: 'Build accessible, reliable product experiences for the Roster platform.', status: 'OPEN', created_date: '2026-08-04' },
-    { id: 'job-2', title: 'People Operations Specialist', department: 'Human Resources', hiring_manager: 'Anita Rao', positions: 1, employment_type: 'Full-time', experience: '2-4 years', location: 'Ludhiana', description: 'Support employee lifecycle programs and people operations workflows.', status: 'OPEN', created_date: '2026-08-08' },
-    { id: 'job-3', title: 'Product Design Intern', department: 'Design', hiring_manager: 'Anita Rao', positions: 1, employment_type: 'Internship', experience: '0-1 years', location: 'Remote', description: 'Join the product design team for a hands-on six-month internship.', status: 'PAUSED', created_date: '2026-07-26' },
-];
+export interface Offer {
+    id: string;
+    candidate_id: string;
+    status: 'SENT' | 'ACCEPTED' | 'DECLINED' | 'WITHDRAWN';
+    sent_at: string;
+}
 
-const SEED_CANDIDATES: Candidate[] = [
-    { id: 'candidate-1', name: 'Riya Mehta', email: 'riya.mehta@example.com', phone: '+91 98765 12001', opening_id: 'job-1', experience: '5 years', source: 'LinkedIn', stage: 'INTERVIEW', interview_date: '2026-08-26T11:00', feedback: '' },
-    { id: 'candidate-2', name: 'Karan Bedi', email: 'karan.bedi@example.com', phone: '+91 98765 12002', opening_id: 'job-1', experience: '4 years', source: 'Referral', stage: 'SHORTLISTED', interview_date: '', feedback: '' },
-    { id: 'candidate-3', name: 'Simran Kaur', email: 'simran.kaur@example.com', phone: '+91 98765 12003', opening_id: 'job-2', experience: '3 years', source: 'Website', stage: 'SCREENING', interview_date: '', feedback: '' },
-    { id: 'candidate-4', name: 'Aditya Kapoor', email: 'aditya.kapoor@example.com', phone: '+91 98765 12004', opening_id: 'job-1', experience: '6 years', source: 'Naukri', stage: 'OFFER_SENT', interview_date: '2026-08-18T15:30', feedback: 'Strong technical and collaboration skills.' },
-    { id: 'candidate-5', name: 'Neha Arora', email: 'neha.arora@example.com', phone: '+91 98765 12005', opening_id: 'job-3', experience: '1 year', source: 'Campus', stage: 'APPLIED', interview_date: '', feedback: '' },
-];
+type OpeningDraft = Omit<JobOpening, 'id' | 'job_code' | 'created_date'>;
+type CandidateDraft = Omit<Candidate, 'id' | 'interview_date'> & { interview_date?: string };
 
-function load<T>(key: string, fallback: T): T {
-    try {
-        const raw = localStorage.getItem(key);
-        if (!raw) {
-            localStorage.setItem(key, JSON.stringify(fallback));
-            return fallback;
-        }
-        return JSON.parse(raw) as T;
-    } catch {
-        return fallback;
-    }
+function recruitmentError(error: { message: string } | null, fallback: string): string | null {
+    return error ? `${fallback}: ${error.message}` : null;
 }
 
 export function useRecruitment() {
-    const [openings, setOpenings] = useState<JobOpening[]>(() => load(OPENINGS_KEY, SEED_OPENINGS));
-    const [candidates, setCandidates] = useState<Candidate[]>(() => load(CANDIDATES_KEY, SEED_CANDIDATES));
+    const [openings, setOpenings] = useState<JobOpening[]>([]);
+    const [candidates, setCandidates] = useState<Candidate[]>([]);
+    const [interviews, setInterviews] = useState<Interview[]>([]);
+    const [offers, setOffers] = useState<Offer[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+    const [actionLoading, setActionLoading] = useState(false);
 
-    useEffect(() => localStorage.setItem(OPENINGS_KEY, JSON.stringify(openings)), [openings]);
-    useEffect(() => localStorage.setItem(CANDIDATES_KEY, JSON.stringify(candidates)), [candidates]);
+    const refresh = useCallback(async () => {
+        setLoading(true);
+        const [openingsResult, candidatesResult, interviewsResult, offersResult] = await Promise.all([
+            supabase.from('job_openings').select('*').order('created_date', { ascending: false }),
+            supabase.from('candidates').select('*').order('created_at', { ascending: false }),
+            supabase.from('interviews').select('*').order('scheduled_at', { ascending: true }),
+            supabase.from('offers').select('*').order('sent_at', { ascending: false }),
+        ]);
+        const firstError = openingsResult.error ?? candidatesResult.error ?? interviewsResult.error ?? offersResult.error;
+        if (firstError) {
+            setError(firstError.message);
+        } else {
+            setError(null);
+            setOpenings((openingsResult.data ?? []) as JobOpening[]);
+            setCandidates((candidatesResult.data ?? []) as Candidate[]);
+            setInterviews((interviewsResult.data ?? []) as Interview[]);
+            setOffers((offersResult.data ?? []) as Offer[]);
+        }
+        setLoading(false);
+    }, []);
 
-    const addOpening = useCallback((opening: Omit<JobOpening, 'id' | 'created_date'>) => {
-        setOpenings((prev) => [...prev, { ...opening, id: crypto.randomUUID(), created_date: new Date().toISOString().slice(0, 10) }]);
-    }, []);
-    const updateOpening = useCallback((id: string, changes: Omit<JobOpening, 'id' | 'created_date'>) => {
-        setOpenings((prev) => prev.map((opening) => opening.id === id ? { ...opening, ...changes } : opening));
-    }, []);
-    const toggleOpening = useCallback((id: string) => {
-        setOpenings((prev) => prev.map((opening) => opening.id === id ? { ...opening, status: opening.status === 'CLOSED' ? 'OPEN' : 'CLOSED' } : opening));
-    }, []);
-    const addCandidate = useCallback((candidate: Omit<Candidate, 'id'>) => {
-        setCandidates((prev) => [...prev, { ...candidate, id: crypto.randomUUID() }]);
-    }, []);
-    const updateCandidate = useCallback((id: string, changes: Partial<Omit<Candidate, 'id'>>) => {
-        setCandidates((prev) => prev.map((candidate) => candidate.id === id ? { ...candidate, ...changes } : candidate));
-    }, []);
+    useEffect(() => { void refresh(); }, [refresh]);
 
-    return { openings, candidates, addOpening, updateOpening, toggleOpening, addCandidate, updateCandidate };
+    const runAction = useCallback(async (action: () => Promise<{ error: { message: string } | null }>, fallback: string) => {
+        setActionLoading(true);
+        const result = await action();
+        if (result.error) {
+            const message = recruitmentError(result.error, fallback);
+            setError(message);
+            setActionLoading(false);
+            return message;
+        }
+        await refresh();
+        setError(null);
+        setActionLoading(false);
+        return null;
+    }, [refresh]);
+
+    const addOpening = useCallback((opening: OpeningDraft) => runAction(
+        async () => await supabase.from('job_openings').insert({ ...opening, job_code: `JOB-${crypto.randomUUID().slice(0, 8).toUpperCase()}` }),
+        'Could not create job opening',
+    ), [runAction]);
+
+    const updateOpening = useCallback((id: string, changes: OpeningDraft) => runAction(
+        async () => await supabase.from('job_openings').update(changes).eq('id', id),
+        'Could not update job opening',
+    ), [runAction]);
+
+    const toggleOpening = useCallback((id: string, status: OpeningStatus = 'CLOSED') => runAction(
+        async () => await supabase.from('job_openings').update({ status }).eq('id', id),
+        'Could not update position status',
+    ), [runAction]);
+
+    const addCandidate = useCallback((candidate: CandidateDraft) => runAction(
+        async () => await supabase.from('candidates').insert({ ...candidate, interview_date: candidate.interview_date || null }),
+        'Could not add candidate',
+    ), [runAction]);
+
+    const updateCandidate = useCallback(async (id: string, changes: Partial<Omit<Candidate, 'id'>>) => {
+        const { interview_date, ...candidateChanges } = changes;
+        setActionLoading(true);
+        const candidateResult = await supabase.from('candidates').update({ ...candidateChanges, ...(interview_date === undefined ? {} : { interview_date: interview_date || null }) }).eq('id', id);
+        if (candidateResult.error) {
+            const message = recruitmentError(candidateResult.error, 'Could not update candidate');
+            setError(message);
+            setActionLoading(false);
+            return message;
+        }
+        if (changes.stage === 'OFFER_SENT') {
+            const offerResult = await supabase.from('offers').upsert({ candidate_id: id, status: 'SENT' }, { onConflict: 'candidate_id' });
+            if (offerResult.error) {
+                const message = recruitmentError(offerResult.error, 'Candidate updated but offer could not be recorded');
+                setError(message);
+                setActionLoading(false);
+                return message;
+            }
+        }
+        await refresh();
+        setError(null);
+        setActionLoading(false);
+        return null;
+    }, [refresh]);
+
+    const scheduleInterview = useCallback(async (candidate: string | { id: string }, scheduledAt = new Date(Date.now() + 2 * 86400000).toISOString().slice(0, 16)) => {
+        const candidateId = typeof candidate === 'string' ? candidate : candidate.id;
+        setActionLoading(true);
+        const interviewResult = await supabase.from('interviews').insert({ candidate_id: candidateId, scheduled_at: scheduledAt, status: 'SCHEDULED' });
+        if (interviewResult.error) {
+            const message = recruitmentError(interviewResult.error, 'Could not schedule interview');
+            setError(message);
+            setActionLoading(false);
+            return message;
+        }
+        const candidateResult = await supabase.from('candidates').update({ stage: 'INTERVIEW', interview_date: scheduledAt }).eq('id', candidateId);
+        if (candidateResult.error) {
+            const message = recruitmentError(candidateResult.error, 'Interview scheduled but candidate stage could not be updated');
+            setError(message);
+            setActionLoading(false);
+            return message;
+        }
+        await refresh();
+        setError(null);
+        setActionLoading(false);
+        return null;
+    }, [refresh]);
+
+    return { openings, candidates, interviews, offers, addOpening, updateOpening, toggleOpening, addCandidate, updateCandidate, scheduleInterview, refresh, loading, actionLoading, error };
 }

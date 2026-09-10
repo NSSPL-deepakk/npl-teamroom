@@ -20,7 +20,7 @@ export function Sidebar({ role }: { role: Role }) {
             />
           </span>
 
-          <div className="flex flex-col">
+          {/* <div className="flex flex-col">
             <span
               className="font-mono text-xs font-semibold tracking-[0.16em]"
               style={{ color: 'var(--text-on-ink)' }}
@@ -33,7 +33,7 @@ export function Sidebar({ role }: { role: Role }) {
             >
               HR SYSTEM
             </span>
-          </div>
+          </div> */}
         </div>
 
         <nav className="mt-2 px-3">

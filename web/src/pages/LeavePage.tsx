@@ -3,6 +3,7 @@ import { useOutletContext } from 'react-router-dom';
 import { useEmployees } from '../data/employees';
 import { leaveDayCount, useLeaveRequests, type LeaveRequest, type LeaveType } from '../data/leave';
 import { Drawer } from '../components/Drawer';
+import { ConfirmDialog } from '../components/ConfirmDialog';
 import { StatCard, StatusTag } from '../components/Ledger';
 import type { Role } from '../data/roles';
 import { useAuth } from '../contexts/AuthContext';
@@ -122,6 +123,16 @@ export default function LeavePage() {
   const [formError, setFormError] = useState('');
   const [actionError, setActionError] = useState('');
 
+  type DecisionAction = 'approve' | 'reject';
+
+  const [confirmation, setConfirmation] = useState<{
+    action: DecisionAction;
+    id: string;
+  } | null>(null);
+
+  const [decisionLoading, setDecisionLoading] = useState(false);
+
+
   const mine = useMemo(
     () => (employee ? requests.filter((r) => r.employee_id === employee.id) : []),
     [requests, employee],
@@ -198,8 +209,26 @@ export default function LeavePage() {
     setDrawerOpen(true);
   }
 
-  async function handleDecision(decide: (id: string) => Promise<string | null>, id: string) {
-    const error = await decide(id);
+  function askForDecision(action: DecisionAction, id: string) {
+    setActionError('');
+    setConfirmation({ action, id });
+  }
+
+  async function handleConfirmedDecision() {
+    if (!confirmation || decisionLoading) return;
+
+    setDecisionLoading(true);
+    setActionError('');
+
+    const { action, id } = confirmation;
+
+    const error =
+      action === 'approve'
+        ? await approve(id)
+        : await reject(id);
+
+    setDecisionLoading(false);
+    setConfirmation(null);
     setActionError(error ?? '');
   }
 
@@ -269,7 +298,14 @@ export default function LeavePage() {
             </p>
           ) : (
             teamRequests.map((r) => (
-              <RequestRow key={r.id} req={r} employeeName={nameFor(r.employee_id)} showApprove onApprove={(id) => void handleDecision(approve, id)} onReject={(id) => void handleDecision(reject, id)} />
+              <RequestRow
+                key={r.id}
+                req={r}
+                employeeName={nameFor(r.employee_id)}
+                showApprove
+                onApprove={(id) => askForDecision('approve', id)}
+                onReject={(id) => askForDecision('reject', id)}
+              />
             ))
           )}
         </div>
@@ -288,7 +324,17 @@ export default function LeavePage() {
             </p>
           ) : (
             orgRequests.map((r) => (
-              <RequestRow key={r.id} req={r} employeeName={nameFor(r.employee_id)} showApprove canDecideAnyStatus={canApproveOrg} canEdit={canApproveOrg} onApprove={(id) => void handleDecision(approve, id)} onReject={(id) => void handleDecision(reject, id)} onEdit={openEditDrawer} />
+              <RequestRow
+                key={r.id}
+                req={r}
+                employeeName={nameFor(r.employee_id)}
+                showApprove
+                canDecideAnyStatus={canApproveOrg}
+                canEdit={canApproveOrg}
+                onApprove={(id) => askForDecision('approve', id)}
+                onReject={(id) => askForDecision('reject', id)}
+                onEdit={openEditDrawer}
+              />
             ))
           )}
         </div>
@@ -362,6 +408,12 @@ export default function LeavePage() {
           </button>
         </form>
       </Drawer>
+      <ConfirmDialog
+        open={confirmation !== null}
+        message={confirmation?.action === 'approve' ? 'Are you sure you want to approve this leave request?' : 'Are you sure you want to reject this leave request?'}
+        onCancel={() => { if (!decisionLoading) setConfirmation(null); }}
+        onConfirm={() => { void handleConfirmedDecision(); }}
+      />
     </div>
   );
 }

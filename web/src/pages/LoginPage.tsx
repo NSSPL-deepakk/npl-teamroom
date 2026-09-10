@@ -50,7 +50,7 @@ export default function LoginPage() {
     <div className="grid min-h-screen lg:grid-cols-2" style={{ background: 'var(--paper)' }}>
       {/* Left — form */}
       <div className="flex flex-col justify-between px-8 py-10 sm:px-16 lg:px-20">
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-3">
           <span className="flex h-[72px] w-[140px] shrink-0 items-center justify-center overflow-visible">
             <img
               src="/logo.jpeg"
@@ -59,12 +59,20 @@ export default function LoginPage() {
             />
           </span>
 
-          <span
-            className="font-mono text-xs tracking-[0.18em]"
-            style={{ color: 'var(--text-secondary)' }}
-          >
-            ROSTER HR
-          </span>
+          <div className="flex items-center gap-2 mt-10 px-10">
+            <span
+              className="font-mono text-[13px] font-bold uppercase tracking-[0.16em]"
+              style={{ color: 'var(--text-on-ink-muted)' }}
+            >
+              ROSTER
+            </span>
+            <span
+              className="font-mono text-[13px] font-bold uppercase tracking-[0.14em]"
+              style={{ color: 'var(--text-on-ink-muted)' }}
+            >
+              HR SYSTEM
+            </span>
+          </div>
         </div>
         <div className="mx-auto w-full max-w-sm">
           <p className="font-mono text-xs uppercase tracking-[0.18em]" style={{ color: 'var(--status-present)' }}>

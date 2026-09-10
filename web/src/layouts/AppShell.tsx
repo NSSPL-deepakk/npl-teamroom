@@ -216,6 +216,22 @@ export default function AppShell() {
               {todayLabel}
             </p>
           </div>
+          <div className="flex w-1/3 flex-col items-center justify-center">
+            <div className="flex items-center gap-2">
+              <span
+                className="font-mono text-[13px] font-bold uppercase tracking-[0.16em]"
+                style={{ color: 'var(--text-on-ink-muted)' }}
+              >
+                ROSTER
+              </span>
+              <span
+                className="font-mono text-[13px] font-bold uppercase tracking-[0.14em]"
+                style={{ color: 'var(--text-on-ink-muted)' }}
+              >
+                HR SYSTEM
+              </span>
+            </div>
+          </div>
 
           <div className="flex items-center gap-3">
             <button
