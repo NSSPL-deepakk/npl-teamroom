@@ -131,7 +131,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     init();
 
-    const { data: listener } = supabase.auth.onAuthStateChange(async (_event, newSession) => {
+    const { data: listener } = supabase.auth.onAuthStateChange(async (event, newSession) => {
+      if (event === 'TOKEN_REFRESHED') return;
+
       setLoading(true);
       setSession(newSession);
       if (newSession) {

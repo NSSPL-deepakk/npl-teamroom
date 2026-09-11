@@ -355,181 +355,306 @@ export default function DocumentsPage() {
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div
-            className="w-full max-w-md border bg-white p-6"
-            style={{ borderColor: 'var(--line-soft)', borderRadius: 'var(--radius-md)' }}
+            className="flex w-full max-w-2xl flex-col overflow-hidden border bg-white"
+            style={{
+              borderColor: 'var(--line-soft)',
+              borderRadius: 'var(--radius-md)',
+              maxHeight: '90vh',
+            }}
           >
-            <h2 className="text-lg font-semibold" style={{ color: 'var(--ink)' }}>
-              Add Document
-            </h2>
-            <p className="mt-1 text-sm" style={{ color: 'var(--text-secondary)' }}>
-              Upload a new HR document
-            </p>
+            {/* Modal Header */}
+            <div className="shrink-0 border-b px-6 py-5" style={{ borderColor: 'var(--line-soft)' }}>
+              <h2 className="text-lg font-semibold" style={{ color: 'var(--ink)' }}>
+                Add Document
+              </h2>
+              <p className="mt-1 text-sm" style={{ color: 'var(--text-secondary)' }}>
+                Upload a new HR document
+              </p>
+            </div>
 
-            <form onSubmit={(event) => void handleAdd(event)} className="mt-6 space-y-4">
-              <label className="block">
-                <span className="text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-secondary)' }}>
-                  Document file
-                </span>
-                <div
-                  className={`mt-2 cursor-pointer rounded-lg border-2 border-dashed p-8 text-center transition-colors ${dragActive ? 'bg-blue-50' : 'bg-gray-50'}`}
-                  style={{
-                    borderColor: dragActive ? 'var(--accent-holiday)' : 'var(--line-soft)',
-                    backgroundColor: dragActive ? 'rgba(244, 144, 12, 0.05)' : 'rgba(0, 0, 0, 0.02)',
-                  }}
-                  onDragEnter={handleDrag}
-                  onDragLeave={handleDrag}
-                  onDragOver={handleDrag}
-                  onDrop={handleDrop}
-                >
-                  <input
-                    type="file"
-                    id="file-input"
-                    onChange={handleFileChange}
-                    accept=".pdf,.docx,.xlsx"
-                    className="hidden"
-                  />
-                  <label htmlFor="file-input" className="block cursor-pointer">
-                    {file ? (
-                      <div>
-                        <p className="text-sm font-medium" style={{ color: 'var(--ink)' }}>
-                          ✓ {file.name}
-                        </p>
-                        <p className="mt-1 text-xs" style={{ color: 'var(--text-secondary)' }}>
-                          {(file.size / 1024).toFixed(2)} KB
-                        </p>
+            {/* Form */}
+            <form
+              onSubmit={(event) => void handleAdd(event)}
+              className="flex min-h-0 flex-1 flex-col"
+            >
+              {/* Scrollable Form Content */}
+              <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+                <div className="space-y-4">
+                  {/* Document File */}
+                  <label className="block">
+                    <span
+                      className="text-xs font-medium uppercase tracking-wide"
+                      style={{ color: 'var(--text-secondary)' }}
+                    >
+                      Document file
+                    </span>
+
+                    <div
+                      className={`mt-2 cursor-pointer rounded-lg border-2 border-dashed p-6 text-center transition-colors ${dragActive ? 'bg-blue-50' : 'bg-gray-50'
+                        }`}
+                      style={{
+                        borderColor: dragActive
+                          ? 'var(--accent-holiday)'
+                          : 'var(--line-soft)',
+                        backgroundColor: dragActive
+                          ? 'rgba(244, 144, 12, 0.05)'
+                          : 'rgba(0, 0, 0, 0.02)',
+                      }}
+                      onDragEnter={handleDrag}
+                      onDragLeave={handleDrag}
+                      onDragOver={handleDrag}
+                      onDrop={handleDrop}
+                    >
+                      <input
+                        type="file"
+                        id="file-input"
+                        onChange={handleFileChange}
+                        accept=".pdf,.docx,.xlsx"
+                        className="hidden"
+                      />
+
+                      <label htmlFor="file-input" className="block cursor-pointer">
+                        {file ? (
+                          <div>
+                            <p
+                              className="text-sm font-medium"
+                              style={{ color: 'var(--ink)' }}
+                            >
+                              ✓ {file.name}
+                            </p>
+
+                            <p
+                              className="mt-1 text-xs"
+                              style={{ color: 'var(--text-secondary)' }}
+                            >
+                              {(file.size / 1024).toFixed(2)} KB
+                            </p>
+                          </div>
+                        ) : (
+                          <div>
+                            <p
+                              className="text-sm font-medium"
+                              style={{ color: 'var(--ink)' }}
+                            >
+                              ↑
+                            </p>
+
+                            <p
+                              className="mt-2 text-sm"
+                              style={{ color: 'var(--text-secondary)' }}
+                            >
+                              Drag & drop your file
+                            </p>
+
+                            <p
+                              className="mt-1 text-xs"
+                              style={{ color: 'var(--text-muted)' }}
+                            >
+                              PDF, DOCX, XLSX
+                            </p>
+                          </div>
+                        )}
+                      </label>
+                    </div>
+                  </label>
+
+                  {/* Upload Error */}
+                  {uploadError && (
+                    <p
+                      className="text-sm"
+                      style={{ color: 'var(--status-absent)' }}
+                    >
+                      {uploadError}
+                    </p>
+                  )}
+
+                  {/* Document Name */}
+                  <label className="block">
+                    <span
+                      className="text-xs font-medium uppercase tracking-wide"
+                      style={{ color: 'var(--text-secondary)' }}
+                    >
+                      Document name
+                    </span>
+
+                    <input
+                      type="text"
+                      required
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      placeholder="e.g. Employee Handbook 2026"
+                      className="mt-1.5 w-full border px-3 py-2 text-sm outline-none"
+                      style={inputStyle}
+                    />
+                  </label>
+
+                  {/* Category */}
+                  <label className="block">
+                    <span
+                      className="text-xs font-medium uppercase tracking-wide"
+                      style={{ color: 'var(--text-secondary)' }}
+                    >
+                      Category
+                    </span>
+
+                    <select
+                      value={category}
+                      onChange={(e) =>
+                        setCategory(e.target.value as CompanyDocCategory)
+                      }
+                      className="mt-1.5 w-full border px-3 py-2 text-sm outline-none"
+                      style={inputStyle}
+                    >
+                      {CATEGORIES.map((c) => (
+                        <option key={c} value={c}>
+                          {c}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  {/* Visibility */}
+                  <label className="block">
+                    <span
+                      className="text-xs font-medium uppercase tracking-wide"
+                      style={{ color: 'var(--text-secondary)' }}
+                    >
+                      Visibility
+                    </span>
+
+                    <select
+                      value={visibility}
+                      onChange={(event) =>
+                        setVisibility(event.target.value as CompanyDocVisibility)
+                      }
+                      className="mt-1.5 w-full border px-3 py-2 text-sm outline-none"
+                      style={inputStyle}
+                    >
+                      <option value="ALL">Visible to all</option>
+                      <option value="MANAGER_ONLY">
+                        Visible to manager only
+                      </option>
+                      <option value="SELECTED_EMPLOYEES">
+                        Visible to HR, managers & selected employees
+                      </option>
+                    </select>
+                  </label>
+
+                  {/* Selected Employees */}
+                  {visibility === 'SELECTED_EMPLOYEES' && (
+                    <div>
+                      <span
+                        className="text-xs font-medium uppercase tracking-wide"
+                        style={{ color: 'var(--text-secondary)' }}
+                      >
+                        Selected employees
+                      </span>
+
+                      <input
+                        type="search"
+                        value={employeeSearch}
+                        onChange={(event) => setEmployeeSearch(event.target.value)}
+                        placeholder="Search employees"
+                        className="mt-1.5 w-full border px-3 py-2 text-sm outline-none"
+                        style={inputStyle}
+                      />
+
+                      <div
+                        className="mt-2 max-h-36 overflow-y-auto border p-2"
+                        style={{
+                          borderColor: 'var(--line)',
+                          borderRadius: 'var(--radius-sm)',
+                        }}
+                      >
+                        {matchingEmployees.length === 0 ? (
+                          <p
+                            className="px-1 py-2 text-xs"
+                            style={{ color: 'var(--text-muted)' }}
+                          >
+                            No employees found.
+                          </p>
+                        ) : (
+                          matchingEmployees.map((employee) => (
+                            <label
+                              key={employee.id}
+                              className="flex cursor-pointer items-center gap-2 px-1 py-1.5 text-sm"
+                              style={{ color: 'var(--ink)' }}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={selectedEmployeeIds.includes(employee.id)}
+                                onChange={() => toggleEmployee(employee.id)}
+                                className="h-4 w-4"
+                              />
+                              <span>{employee.name}</span>
+                            </label>
+                          ))
+                        )}
                       </div>
-                    ) : (
-                      <div>
-                        <p className="text-sm font-medium" style={{ color: 'var(--ink)' }}>
-                          ↑
-                        </p>
-                        <p className="mt-2 text-sm" style={{ color: 'var(--text-secondary)' }}>
-                          Drag & drop your file
-                        </p>
-                        <p className="mt-1 text-xs" style={{ color: 'var(--text-muted)' }}>
-                          PDF, DOCX, XLSX
-                        </p>
-                      </div>
-                    )}
+
+                      <p
+                        className="mt-1 text-xs"
+                        style={{ color: 'var(--text-muted)' }}
+                      >
+                        {selectedEmployeeIds.length} employee
+                        {selectedEmployeeIds.length === 1 ? '' : 's'} selected
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Description */}
+                  <label className="block">
+                    <span
+                      className="text-xs font-medium uppercase tracking-wide"
+                      style={{ color: 'var(--text-secondary)' }}
+                    >
+                      Description
+                    </span>
+
+                    <textarea
+                      value={description}
+                      onChange={(e) => setDescription(e.target.value)}
+                      placeholder="Optional description"
+                      className="mt-1.5 w-full resize-none border px-3 py-2 text-sm outline-none"
+                      rows={3}
+                      style={inputStyle}
+                    />
                   </label>
                 </div>
-              </label>
+              </div>
 
-              {uploadError && (
-                <p className="text-sm" style={{ color: 'var(--status-absent)' }}>{uploadError}</p>
-              )}
+              {/* Fixed Footer */}
+              <div
+                className="shrink-0 border-t bg-white px-6 py-4"
+                style={{ borderColor: 'var(--line-soft)' }}
+              >
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    onClick={handleCancel}
+                    className="flex-1 border py-2.5 text-sm font-medium transition-colors hover:bg-gray-50"
+                    style={{
+                      borderColor: 'var(--line)',
+                      borderRadius: 'var(--radius-sm)',
+                      color: 'var(--ink)',
+                    }}
+                  >
+                    Cancel
+                  </button>
 
-              <label className="block">
-                <span className="text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-secondary)' }}>
-                  Document name
-                </span>
-                <input
-                  type="text"
-                  required
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="e.g. Employee Handbook 2026"
-                  className="mt-1.5 w-full border px-3 py-2 text-sm outline-none"
-                  style={inputStyle}
-                />
-              </label>
-
-              <label className="block">
-                <span className="text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-secondary)' }}>
-                  Category
-                </span>
-                <select
-                  value={category}
-                  onChange={(e) => setCategory(e.target.value as CompanyDocCategory)}
-                  className="mt-1.5 w-full border px-3 py-2 text-sm outline-none"
-                  style={inputStyle}
-                >
-                  {CATEGORIES.map((c) => (
-                    <option key={c} value={c}>
-                      {c}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <label className="block">
-                <span className="text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-secondary)' }}>
-                  Visibility
-                </span>
-                <select
-                  value={visibility}
-                  onChange={(event) => setVisibility(event.target.value as CompanyDocVisibility)}
-                  className="mt-1.5 w-full border px-3 py-2 text-sm outline-none"
-                  style={inputStyle}
-                >
-                  <option value="ALL">Visible to all</option>
-                  <option value="MANAGER_ONLY">Visible to manager only</option>
-                  <option value="SELECTED_EMPLOYEES">Visible to HR, managers &amp; selected employees</option>
-                </select>
-              </label>
-
-              {visibility === 'SELECTED_EMPLOYEES' && (
-                <div>
-                  <span className="text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-secondary)' }}>
-                    Selected employees
-                  </span>
-                  <input
-                    type="search"
-                    value={employeeSearch}
-                    onChange={(event) => setEmployeeSearch(event.target.value)}
-                    placeholder="Search employees"
-                    className="mt-1.5 w-full border px-3 py-2 text-sm outline-none"
-                    style={inputStyle}
-                  />
-                  <div className="mt-2 max-h-36 overflow-y-auto border p-2" style={{ borderColor: 'var(--line)', borderRadius: 'var(--radius-sm)' }}>
-                    {matchingEmployees.length === 0 ? (
-                      <p className="px-1 py-2 text-xs" style={{ color: 'var(--text-muted)' }}>No employees found.</p>
-                    ) : matchingEmployees.map((employee) => (
-                      <label key={employee.id} className="flex cursor-pointer items-center gap-2 px-1 py-1.5 text-sm" style={{ color: 'var(--ink)' }}>
-                        <input type="checkbox" checked={selectedEmployeeIds.includes(employee.id)} onChange={() => toggleEmployee(employee.id)} className="h-4 w-4" />
-                        <span>{employee.name}</span>
-                      </label>
-                    ))}
-                  </div>
-                  <p className="mt-1 text-xs" style={{ color: 'var(--text-muted)' }}>{selectedEmployeeIds.length} employee{selectedEmployeeIds.length === 1 ? '' : 's'} selected</p>
+                  <button
+                    type="submit"
+                    disabled={!name.trim() || !file}
+                    className="flex-1 py-2.5 text-sm font-medium transition-opacity hover:opacity-90 disabled:opacity-50"
+                    style={{
+                      background: 'var(--accent-holiday)',
+                      color: 'white',
+                      borderRadius: 'var(--radius-sm)',
+                    }}
+                  >
+                    Upload
+                  </button>
                 </div>
-              )}
-
-              <label className="block">
-                <span className="text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-secondary)' }}>
-                  Description
-                </span>
-                <textarea
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Optional description"
-                  className="mt-1.5 w-full resize-none border px-3 py-2 text-sm outline-none"
-                  rows={3}
-                  style={inputStyle}
-                />
-              </label>
-
-              <div className="mt-6 flex gap-3 border-t pt-4" style={{ borderColor: 'var(--line-soft)' }}>
-                <button
-                  type="button"
-                  onClick={handleCancel}
-                  className="flex-1 border py-2.5 text-sm font-medium transition-colors hover:bg-gray-50"
-                  style={{ borderColor: 'var(--line)', borderRadius: 'var(--radius-sm)', color: 'var(--ink)' }}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={!name.trim() || !file}
-                  className="flex-1 py-2.5 text-sm font-medium transition-opacity hover:opacity-90 disabled:opacity-50"
-                  style={{
-                    background: 'var(--accent-holiday)',
-                    color: 'white',
-                    borderRadius: 'var(--radius-sm)',
-                  }}
-                >
-                  Upload
-                </button>
               </div>
             </form>
           </div>
