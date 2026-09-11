@@ -1,22 +1,20 @@
-import { useMemo } from 'react';
-import { useEmployees } from '../data/employees';
-import { useDepartments } from '../data/departments';
-import { useAttendance, requiredHoursForEmployeeMonth, totalHoursForMonth } from '../data/attendance';
-import { useHolidays } from '../data/holidays';
+import { useMemo, useState } from 'react';
+import { useEmployees, type Employee } from '../data/employees';
+import { useDepartments, type Department } from '../data/departments';
 import { StatCard, LedgerPanel } from '../components/Ledger';
 
+type ReportSelection = 'active' | 'inactive' | 'attrition' | 'departments' | `department:${string}`;
+
 export default function ReportsPage() {
-  const { employees } = useEmployees();
-  const { departments } = useDepartments();
-  const { records } = useAttendance();
-  const { holidays } = useHolidays();
+  const { employees, loading: employeesLoading, error: employeesError } = useEmployees();
+  const { departments, loading: departmentsLoading, error: departmentsError } = useDepartments();
+  const [selection, setSelection] = useState<ReportSelection>('active');
 
   const now = new Date();
-  const year = now.getFullYear();
-  const month = now.getMonth() + 1;
 
   const activeCount = employees.filter((e) => e.employment_status === 'ACTIVE').length;
   const inactiveCount = employees.length - activeCount;
+
   const attritionRate = employees.length > 0 ? Math.round((inactiveCount / employees.length) * 1000) / 10 : 0;
 
   const deptBreakdown = useMemo(
@@ -27,17 +25,30 @@ export default function ReportsPage() {
     [departments, employees],
   );
 
-  // Attendance summary: employees who actually have attendance history this month.
-  const attendanceRows = useMemo(() => {
-    const withHistory = employees.filter((e) => records.some((r) => r.employee_id === e.id));
-    return withHistory
-      .map((e) => {
-        const total = totalHoursForMonth(records, e.id, year, month);
-        const required = requiredHoursForEmployeeMonth(records, e.id, year, month, holidays);
-        return { employee: e, total, required, variance: Math.round((total - required) * 10) / 10 };
-      })
-      .sort((a, b) => a.variance - b.variance);
-  }, [employees, records, year, month, holidays]);
+  const selectedDepartmentId = selection.startsWith('department:') ? selection.slice('department:'.length) : null;
+  const selectedDepartment = selectedDepartmentId
+    ? departments.find((department) => department.id === selectedDepartmentId) ?? null
+    : null;
+  const selectedEmployees = useMemo(() => {
+    if (selection === 'active') return employees.filter((employee) => employee.employment_status === 'ACTIVE');
+    if (selection === 'inactive' || selection === 'attrition') return employees.filter((employee) => employee.employment_status === 'INACTIVE');
+    if (selectedDepartmentId) return employees.filter((employee) => employee.department_id === selectedDepartmentId);
+    return [];
+  }, [employees, selectedDepartmentId, selection]);
+
+  const reportTitle = selectedDepartment?.name ?? (
+    selection === 'active' ? 'Active employees' :
+      selection === 'inactive' ? 'Inactive employees' :
+        selection === 'attrition' ? 'Attrition report' :
+          selection === 'departments' ? 'Department report' : 'Report details'
+  );
+  const reportDescription = selectedDepartment
+    ? `${selectedEmployees.length} employee${selectedEmployees.length === 1 ? '' : 's'}`
+    : selection === 'departments'
+      ? `${departments.length} department${departments.length === 1 ? '' : 's'}`
+      : 'Live employee records from Supabase';
+  const dataLoading = employeesLoading || departmentsLoading;
+  const dataError = employeesError ?? departmentsError;
 
   return (
     <div>
@@ -52,19 +63,26 @@ export default function ReportsPage() {
       </p>
 
       <div className="mt-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <StatCard label="Headcount (active)" value={activeCount} status="present" />
-        <StatCard label="Inactive" value={inactiveCount} status="neutral" />
-        <StatCard label="Attrition rate" value={`${attritionRate}%`} status={attritionRate > 10 ? 'absent' : 'structure'} />
-        <StatCard label="Departments" value={departments.length} status="structure" />
+        <StatCard label="Headcount (active)" value={activeCount} status="present" selected={selection === 'active'} onClick={() => setSelection('active')} />
+        <StatCard label="Inactive" value={inactiveCount} status="neutral" selected={selection === 'inactive'} onClick={() => setSelection('inactive')} />
+        <StatCard label="Attrition rate" value={`${attritionRate}%`} status={attritionRate > 10 ? 'absent' : 'structure'} selected={selection === 'attrition'} onClick={() => setSelection('attrition')} />
+        <StatCard label="Departments" value={departments.length} status="structure" selected={selection === 'departments'} onClick={() => setSelection('departments')} />
       </div>
 
       <div className="mt-6 grid gap-6 lg:grid-cols-2">
         <LedgerPanel title="Headcount by department">
-          {deptBreakdown.map((d) => (
-            <div
+          {departmentsLoading ? (
+            <p className="px-5 py-8 text-center text-sm" style={{ color: 'var(--text-muted)' }}>Loading departments...</p>
+          ) : deptBreakdown.length === 0 ? (
+            <p className="px-5 py-8 text-center text-sm" style={{ color: 'var(--text-muted)' }}>No departments found.</p>
+          ) : deptBreakdown.map((d) => (
+            <button
               key={d.id}
-              className="flex items-center gap-4 border-b px-5 py-3 last:border-b-0"
-              style={{ borderColor: 'var(--line-soft)' }}
+              type="button"
+              onClick={() => setSelection(`department:${d.id}`)}
+              aria-pressed={selection === `department:${d.id}`}
+              className="flex w-full items-center gap-4 border-b px-5 py-3 text-left last:border-b-0 hover:bg-[var(--paper)]"
+              style={{ borderColor: 'var(--line-soft)', background: selection === `department:${d.id}` ? 'var(--accent-structure-bg)' : undefined }}
             >
               <span className="h-8 w-[3px] shrink-0" style={{ background: 'var(--accent-structure)' }} />
               <span className="flex-1 text-sm" style={{ color: 'var(--ink)' }}>
@@ -73,55 +91,50 @@ export default function ReportsPage() {
               <span className="font-mono text-xs" style={{ color: 'var(--text-secondary)' }}>
                 {d.count} people
               </span>
-            </div>
+            </button>
           ))}
         </LedgerPanel>
 
+        {selection !== 'departments' && (
+          <LedgerPanel title={reportTitle} action={<span className="font-mono text-[11px] uppercase" style={{ color: 'var(--text-muted)' }}>{reportDescription}</span>}>
+            {dataLoading ? (
+              <p className="px-5 py-8 text-center text-sm" style={{ color: 'var(--text-muted)' }}>Loading report data...</p>
+            ) : dataError ? (
+              <p className="px-5 py-8 text-center text-sm" style={{ color: 'var(--status-absent)' }}>{dataError}</p>
+            ) : selectedEmployees.length === 0 ? (
+              <p className="px-5 py-8 text-center text-sm" style={{ color: 'var(--text-muted)' }}>No employee data found.</p>
+            ) : (
+              <EmployeeReportTable employees={selectedEmployees} departments={departments} />
+            )}
+          </LedgerPanel>
+        )}
+
       </div>
 
-      <div className="mt-6">
-        <LedgerPanel title="Attendance summary — hours vs. required this month">
-          {attendanceRows.length === 0 ? (
-            <p className="px-5 py-8 text-center text-sm" style={{ color: 'var(--text-muted)' }}>
-              No attendance history recorded yet.
-            </p>
-          ) : (
-            attendanceRows.map(({ employee, total, required, variance }) => (
-              <div
-                key={employee.id}
-                className="flex items-center gap-4 border-b px-5 py-3 last:border-b-0"
-                style={{ borderColor: 'var(--line-soft)' }}
-              >
-                <span
-                  className="h-8 w-[3px] shrink-0"
-                  style={{ background: variance >= 0 ? 'var(--status-present)' : 'var(--status-absent)' }}
-                />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium" style={{ color: 'var(--ink)' }}>
-                    {employee.name}
-                  </p>
-                  <p className="font-mono truncate text-xs" style={{ color: 'var(--text-muted)' }}>
-                    {employee.employee_code}
-                  </p>
-                </div>
-                <span className="font-mono text-xs" style={{ color: 'var(--text-secondary)' }}>
-                  {total}h logged
-                </span>
-                <span className="font-mono text-xs" style={{ color: 'var(--text-muted)' }}>
-                  {required}h required
-                </span>
-                <span
-                  className="font-mono w-16 text-right text-xs"
-                  style={{ color: variance >= 0 ? 'var(--status-present)' : 'var(--status-absent)' }}
-                >
-                  {variance >= 0 ? '+' : ''}
-                  {variance}h
-                </span>
-              </div>
-            ))
-          )}
-        </LedgerPanel>
-      </div>
+    </div>
+  );
+}
+
+function EmployeeReportTable({ employees, departments }: { employees: Employee[]; departments: Department[] }) {
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full min-w-[440px] text-left">
+        <thead>
+          <tr className="border-b" style={{ borderColor: 'var(--line-soft)' }}>
+            {['Employee', 'Code', 'Department', 'Status'].map((heading) => <th key={heading} className="px-5 py-3 font-mono text-[10px] uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>{heading}</th>)}
+          </tr>
+        </thead>
+        <tbody>
+          {employees.map((employee) => (
+            <tr key={employee.id} className="border-b last:border-b-0" style={{ borderColor: 'var(--line-soft)' }}>
+              <td className="px-5 py-3 text-sm font-medium" style={{ color: 'var(--ink)' }}>{employee.name}</td>
+              <td className="px-5 py-3 font-mono text-xs" style={{ color: 'var(--text-secondary)' }}>{employee.employee_code}</td>
+              <td className="px-5 py-3 text-xs" style={{ color: 'var(--text-secondary)' }}>{departments.find((department) => department.id === employee.department_id)?.name ?? '—'}</td>
+              <td className="px-5 py-3 font-mono text-[11px] uppercase" style={{ color: employee.employment_status === 'ACTIVE' ? 'var(--status-present)' : 'var(--status-neutral)' }}>{employee.employment_status}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }

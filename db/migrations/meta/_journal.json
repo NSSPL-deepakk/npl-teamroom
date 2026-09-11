@@ -134,6 +134,13 @@
       "when": 1789017600000,
       "tag": "0021_onboarding_workflow",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1789021200000,
+      "tag": "0022_notifications",
+      "breakpoints": true
     }
   ]
 }

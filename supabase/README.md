@@ -31,6 +31,21 @@ supabase functions deploy send-email-notification
 supabase secrets set RESEND_API_KEY=... RESEND_FROM_EMAIL=...
 ```
 
+The in-app notification table, recipient triggers, RLS policies, and Realtime
+publication are created by the `db/migrations/0022_notifications.sql`
+migration. From the `db/` directory, configure `DATABASE_URL` with the
+Supabase PostgreSQL connection string and run:
+
+```bash
+npm install
+npm run db:migrate
+```
+
+Apply this migration before opening the notification bell. Creating an
+announcement or submitting leave then creates the in-app notification row;
+the web client also invokes the Edge Function to send the corresponding
+Resend email.
+
 `RESEND_API_KEY` and `RESEND_FROM_EMAIL` are server-side secrets. The function
 uses the authenticated request plus the service-role client to resolve active
 employees and HR/Admin recipients. The existing `SUPABASE_URL`,

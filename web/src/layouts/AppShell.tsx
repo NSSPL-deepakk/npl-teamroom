@@ -7,6 +7,7 @@ import { useEmployees, type Gender } from '../data/employees';
 import { LOGGED_IN_ELSEWHERE_MESSAGE, useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { Drawer } from '../components/Drawer';
+import { NotificationBell } from '../components/NotificationBell';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 const PROFILE_OVERRIDES_KEY = 'roster.profile-overrides';
@@ -234,6 +235,7 @@ export default function AppShell() {
           </div>
 
           <div className="flex items-center gap-3">
+            <NotificationBell userId={session?.user.id} />
             <button
               onClick={openProfile}
               aria-label="Open my profile"

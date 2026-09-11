@@ -234,6 +234,37 @@ export const profiles = pgTable(
 ).enableRLS();
 
 // ─────────────────────────────────────────────────────────────
+// notifications
+// ─────────────────────────────────────────────────────────────
+export const notifications = pgTable(
+  'notifications',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    recipientUserId: uuid('recipient_user_id').notNull().references(() => profiles.id, { onDelete: 'cascade' }),
+    kind: text('kind').notNull(),
+    title: text('title').notNull(),
+    message: text('message').notNull(),
+    referenceId: uuid('reference_id'),
+    readAt: timestamp('read_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index('notifications_recipient_created_idx').on(table.recipientUserId, table.createdAt),
+    pgPolicy('notifications_select_own', {
+      for: 'select',
+      to: authenticatedRole,
+      using: sql`${table.recipientUserId} = auth.uid()`,
+    }),
+    pgPolicy('notifications_update_own', {
+      for: 'update',
+      to: authenticatedRole,
+      using: sql`${table.recipientUserId} = auth.uid()`,
+      withCheck: sql`${table.recipientUserId} = auth.uid()`,
+    }),
+  ],
+).enableRLS();
+
+// ─────────────────────────────────────────────────────────────
 // leave_requests
 // ─────────────────────────────────────────────────────────────
 export const leaveRequests = pgTable(

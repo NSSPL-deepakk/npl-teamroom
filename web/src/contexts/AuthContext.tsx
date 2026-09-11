@@ -77,7 +77,7 @@ async function claimActiveSession(session: Session): Promise<{ sessionId: string
 }
 
 function clearClientSessionState() {
-  sessionStorage.clear();
+  sessionStorage.removeItem('active_session_id');
   localStorage.removeItem('roster.profile-overrides');
 }
 

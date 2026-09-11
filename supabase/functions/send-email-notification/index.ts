@@ -14,6 +14,16 @@ type NotificationRequest = {
   record_id: string;
 };
 
+function isNotificationRequest(value: unknown): value is NotificationRequest {
+  if (!value || typeof value !== 'object') return false;
+  const request = value as Record<string, unknown>;
+  return (
+    (request.kind === 'announcement_created' || request.kind === 'leave_request_submitted') &&
+    typeof request.record_id === 'string' &&
+    request.record_id.length > 0
+  );
+}
+
 function json(body: Record<string, unknown>, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
@@ -79,14 +89,14 @@ Deno.serve(async (request) => {
     return json({ error: 'Caller profile is not active' }, 403);
   }
 
-  let payload: NotificationRequest;
+  let payload: unknown;
   try {
     payload = await request.json();
   } catch (error) {
     console.error('[send-email-notification] Invalid request body', error);
     return json({ error: 'Invalid request body' }, 400);
   }
-  if (!payload.record_id || !['announcement_created', 'leave_request_submitted'].includes(payload.kind)) {
+  if (!isNotificationRequest(payload)) {
     return json({ error: 'kind and record_id are required' }, 400);
   }
 
@@ -106,12 +116,23 @@ Deno.serve(async (request) => {
       return json({ error: 'Announcement was not found' }, 404);
     }
 
-    const { data: employees, error: employeesError } = await adminClient
+    const { data: activeEmployees, error: employeesError } = await adminClient
       .from('employees')
       .select('email')
       .eq('employment_status', 'ACTIVE');
-    if (employeesError) return json({ error: 'Could not load announcement recipients' }, 500);
-    recipients = [...new Set((employees ?? []).map((employee) => employee.email).filter(validEmail))];
+    const { data: adminProfiles, error: profilesError } = await adminClient
+      .from('profiles')
+      .select('email')
+      .in('role', ['HR', 'SUPER_ADMIN'])
+      .eq('login_enabled', true);
+    if (employeesError || profilesError) return json({ error: 'Could not load announcement recipients' }, 500);
+    recipients = [
+      ...new Set(
+        [...(activeEmployees ?? []), ...(adminProfiles ?? [])]
+          .map((recipient) => recipient.email)
+          .filter(validEmail),
+      ),
+    ];
     subject = `Announcement: ${announcement.name}`;
     html = `<h2>${escapeHtml(announcement.name)}</h2><p><strong>Date:</strong> ${escapeHtml(announcement.date)}</p><p>${escapeHtml(announcement.description ?? '')}</p>`;
   } else {
@@ -135,11 +156,17 @@ Deno.serve(async (request) => {
 
     const { data: hrProfiles, error: profileError } = await adminClient
       .from('profiles')
-      .select('email')
-      .in('role', ['HR', 'SUPER_ADMIN'])
+      .select('email, employee_id, role')
       .eq('login_enabled', true);
     if (profileError) return json({ error: 'Could not load leave recipients' }, 500);
-    recipients = [...new Set((hrProfiles ?? []).map((profile) => profile.email).filter(validEmail))];
+    recipients = [
+      ...new Set(
+        (hrProfiles ?? [])
+          .filter((profile) => profile.role === 'HR' || profile.role === 'SUPER_ADMIN' || profile.employee_id === requestEmployee.manager_id)
+          .map((profile) => profile.email)
+          .filter(validEmail),
+      ),
+    ];
     const days = Math.round((new Date(`${leaveRequest.end_date}T00:00:00`).getTime() - new Date(`${leaveRequest.start_date}T00:00:00`).getTime()) / 86400000) + 1;
     subject = `Leave request: ${requestEmployee.name}`;
     html = `<h2>New leave request</h2><p><strong>Employee:</strong> ${escapeHtml(requestEmployee.name)}</p><p><strong>Leave type:</strong> ${escapeHtml(leaveRequest.type)}</p><p><strong>From:</strong> ${escapeHtml(leaveRequest.start_date)}</p><p><strong>To:</strong> ${escapeHtml(leaveRequest.end_date)}</p><p><strong>Number of days:</strong> ${days}</p><p><strong>Reason:</strong> ${escapeHtml(leaveRequest.reason)}</p>`;
