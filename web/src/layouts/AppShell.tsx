@@ -244,12 +244,12 @@ export default function AppShell() {
             >
               {profileInitials}
             </button>
-            <span
+            {/* <span
               className="font-mono text-[10px] uppercase tracking-wide"
               style={{ color: 'var(--text-secondary)' }}
             >
               {ROLE_LABEL[role]}
-            </span>
+            </span> */}
             <button
               onClick={signOut}
               className="border px-3 py-1.5 text-xs font-medium transition-colors hover:bg-[var(--paper)]"
