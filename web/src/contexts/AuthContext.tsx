@@ -61,6 +61,9 @@ function getAuthSessionId(accessToken: string): string | null {
 async function claimActiveSession(session: Session): Promise<{ sessionId: string | null; error: string | null }> {
   const sessionId = crypto.randomUUID();
   const authSessionId = getAuthSessionId(session.access_token);
+  console.log("auth token", authSessionId);
+  const token = session.access_token;  // ← This is what you need
+  console.log("Full access token:", token);
   if (!authSessionId) return { sessionId: null, error: 'Could not verify the Supabase authentication session.' };
 
   const { error } = await supabase.from('active_sessions').upsert({
