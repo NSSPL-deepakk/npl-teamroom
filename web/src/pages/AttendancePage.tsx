@@ -10,14 +10,13 @@ import {
   type AttendanceRecord,
 } from '../data/attendance';
 import { useCurrentEmployee } from '../data/currentUser';
-import { useDepartments } from '../data/departments';
-import { useDesignations } from '../data/designations';
-import { useEmployees, type WorkMode } from '../data/employees';
+import { type WorkMode } from '../data/employees';
 import { classifyDay, useHolidays } from '../data/holidays';
 import { useLeaveRequests } from '../data/leave';
 import type { Role } from '../data/roles';
 import { ChevronRight } from 'lucide-react';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { useAppData } from '../contexts/AppDataContext';
 
 type Ctx = { role: Role };
 
@@ -47,19 +46,22 @@ function minutesBetween(checkIn: string | null, checkOut: string | null): number
 export default function AttendancePage() {
   const navigate = useNavigate();
   const { role } = useOutletContext<Ctx>();
-  const employee = useCurrentEmployee(role);
-  const { employees } = useEmployees();
-  const { departments } = useDepartments();
-  const { designations } = useDesignations();
+  const { employees, departments, designations } = useAppData();
+  const employee = useCurrentEmployee(role, employees);
   const { holidays } = useHolidays();
   const { requests: leaveRequests, refresh: refreshLeaveRequests } = useLeaveRequests();
-  const { records, checkIn, checkOut, addManualEntry, approveRecord, rejectRecord, today, loading, error, refresh: refreshAttendance } = useAttendance();
-
   const isHRAdmin = role === 'HR' || role === 'SUPER_ADMIN';
   const [viewMode, setViewMode] = useState<'my' | 'employee'>('my');
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string | null>(null);
   const [month, setMonth] = useState(new Date().getMonth() + 1);
   const [year, setYear] = useState(new Date().getFullYear());
+  const attendanceStartDate = `${year}-${String(month).padStart(2, '0')}-01`;
+  const lastDayOfMonth = new Date(year, month, 0).getDate();
+  const attendanceEndDate = `${year}-${String(month).padStart(2, '0')}-${String(lastDayOfMonth).padStart(2, '0')}`;
+  const { records, checkIn, checkOut, addManualEntry, approveRecord, rejectRecord, today, loading, error, refresh: refreshAttendance } = useAttendance({
+    startDate: attendanceStartDate,
+    endDate: attendanceEndDate,
+  });
   const [selectedDate, setSelectedDate] = useState<string>(today);
   const [workMode, setWorkMode] = useState<WorkMode>(employee?.work_mode ?? 'OFFICE');
   const [location, setLocation] = useState<LocationState>({ status: 'idle' });
@@ -407,7 +409,6 @@ export default function AttendancePage() {
       ['On Leave', organizationMetrics.onLeave, '#F59E0B', 'leave'],
       ['Holiday', organizationMetrics.holiday, 'var(--accent-holiday)', 'holiday'],
       ['WFH', organizationMetrics.wfh, 'var(--accent-structure)', 'wfh'],
-      ['Late', organizationMetrics.late, '#B45309', 'late'],
     ] as const;
 
     return (
@@ -711,7 +712,7 @@ export default function AttendancePage() {
                 borderRadius: 'var(--radius-sm)',
               }}
             >
-             Monthly Employees Attendance
+              Monthly Employees Attendance
             </button>
           </div>
         )}

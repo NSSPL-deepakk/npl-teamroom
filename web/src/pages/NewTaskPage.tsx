@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
 import { useClients } from '../data/clients';
 import { useCurrentEmployee } from '../data/currentUser';
-import { useEmployees } from '../data/employees';
+import { useAppData } from '../contexts/AppDataContext';
 import { useProjects } from '../data/projects';
 import { useTasks, type TaskPriority } from '../data/tasks';
 import type { Role } from '../data/roles';
@@ -15,8 +15,8 @@ const inputStyle = { borderColor: 'var(--line)', borderRadius: 'var(--radius-sm)
 export default function NewTaskPage() {
     const navigate = useNavigate();
     const { role } = useOutletContext<Ctx>();
-    const employee = useCurrentEmployee(role);
-    const { employees } = useEmployees();
+    const { employees } = useAppData();
+    const employee = useCurrentEmployee(role, employees);
     const { clients, loading: clientsLoading, error: clientsError } = useClients();
     const { projects, loading: projectsLoading, error: projectsError } = useProjects();
     const { addTask, loading: tasksLoading, error: tasksError } = useTasks();

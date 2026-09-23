@@ -1,4 +1,4 @@
-import { useEmployees, type Employee } from './employees';
+import type { Employee } from './employees';
 import type { Role } from './roles';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -10,8 +10,7 @@ const CURRENT_EMPLOYEE_BY_ROLE: Partial<Record<Role, string>> = {
   EMPLOYEE: 'e3', // Arjun Sinha
 };
 
-export function useCurrentEmployee(role: Role): Employee | null {
-  const { employees } = useEmployees();
+export function useCurrentEmployee(role: Role, employees: Employee[]): Employee | null {
   const { profile } = useAuth();
   const id = profile?.employee_id ?? CURRENT_EMPLOYEE_BY_ROLE[role] ?? null;
   if (!id) return null;

@@ -141,6 +141,13 @@
       "when": 1789021200000,
       "tag": "0022_notifications",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1789024800000,
+      "tag": "0023_remove_deleted_event_notifications",
+      "breakpoints": true
     }
   ]
 }

@@ -4,7 +4,7 @@ import { ChevronDown, ChevronRight, Pencil } from 'lucide-react';
 import { Drawer } from '../components/Drawer';
 import { StatusTag } from '../components/Ledger';
 import { useClients } from '../data/clients';
-import { useEmployees } from '../data/employees';
+import { useAppData } from '../contexts/AppDataContext';
 import { useProjects, type Project } from '../data/projects';
 import { useTasks } from '../data/tasks';
 import type { Role } from '../data/roles';
@@ -28,7 +28,7 @@ export default function ProjectsPage() {
     const { role } = useOutletContext<Ctx>();
     const canManage = role === 'SUPER_ADMIN' || role === 'HR' || role === 'MANAGER';
     const { clients, loading: clientsLoading, error: clientsError } = useClients();
-    const { employees } = useEmployees();
+    const { employees } = useAppData();
     const { projects, addProject, updateProject, loading: projectsLoading, error: projectsError } = useProjects();
     const { tasks, loading: tasksLoading, error: tasksError } = useTasks();
 
@@ -242,19 +242,9 @@ export default function ProjectsPage() {
                                                                 No team members assigned.
                                                             </p>
                                                         ) : (
-                                                            <div className="mt-2 space-y-1.5">
-                                                                {project.team_member_ids.map((id) => {
-                                                                    const emp = employeeById(id);
-                                                                    return (
-                                                                        <div key={id} className="flex items-center gap-3 text-sm">
-                                                                            <span style={{ color: 'var(--ink)' }}>{emp?.name ?? 'Unknown'}</span>
-                                                                            <span className="font-mono text-xs" style={{ color: 'var(--text-secondary)' }}>
-                                                                                {emp?.email ?? '—'}
-                                                                            </span>
-                                                                        </div>
-                                                                    );
-                                                                })}
-                                                            </div>
+                                                            <p className="mt-2 text-sm" style={{ color: 'var(--ink)' }}>
+                                                                {project.team_member_ids.map((id) => employeeById(id)?.name ?? 'Unknown').join(', ')}
+                                                            </p>
                                                         )}
                                                     </td>
                                                 </tr>

@@ -1,10 +1,9 @@
 import { Outlet, useNavigate } from 'react-router-dom';
 import { Sidebar } from '../components/Sidebar';
 import { ROLE_LABEL, type Role } from '../data/roles';
-import { useDepartments } from '../data/departments';
-import { useDesignations } from '../data/designations';
-import { useEmployees, type Gender } from '../data/employees';
+import { type Gender } from '../data/employees';
 import { LOGGED_IN_ELSEWHERE_MESSAGE, useAuth } from '../contexts/AuthContext';
+import { AppDataProvider, useAppData } from '../contexts/AppDataContext';
 import { supabase } from '../lib/supabase';
 import { Drawer } from '../components/Drawer';
 import { NotificationBell } from '../components/NotificationBell';
@@ -17,16 +16,22 @@ type ProfileOverride = { name?: string; date_of_birth?: string; gender?: Gender 
 type ProfileOverrides = Partial<Record<Role, ProfileOverride>>;
 
 export default function AppShell() {
+  return (
+    <AppDataProvider>
+      <AppShellContent />
+    </AppDataProvider>
+  );
+}
+
+function AppShellContent() {
   const navigate = useNavigate();
   const { activeSessionId, profile, session, signIn, signOut: authSignOut } = useAuth();
   const role: Role = profile?.role ?? 'EMPLOYEE';
-  const { employees, updateEmployee } = useEmployees();
+  const { employees, updateEmployee, departments, designations } = useAppData();
   const employee = useMemo(
     () => (profile?.employee_id ? employees.find((e) => e.id === profile.employee_id) ?? null : null),
     [employees, profile],
   );
-  const { departments } = useDepartments();
-  const { designations } = useDesignations();
   const [profileOpen, setProfileOpen] = useState(false);
   const [profileOverrides, setProfileOverrides] = useState<ProfileOverrides>(() => {
     try {

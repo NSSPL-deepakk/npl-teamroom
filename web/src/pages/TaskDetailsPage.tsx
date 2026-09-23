@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { useNavigate, useOutletContext, useParams } from 'react-router-dom';
 import { useClients } from '../data/clients';
 import { useCurrentEmployee } from '../data/currentUser';
-import { useEmployees } from '../data/employees';
+import { useAppData } from '../contexts/AppDataContext';
 import { useProjects } from '../data/projects';
 import { useTasks, type TaskPriority, type TaskStatus } from '../data/tasks';
 import { useUsers } from '../data/users';
@@ -29,12 +29,15 @@ export default function TaskDetailsPage() {
     const navigate = useNavigate();
     const { role } = useOutletContext<Context>();
     const { id } = useParams();
-    const currentEmployee = useCurrentEmployee(role);
-    const { employees } = useEmployees();
+    const { employees } = useAppData();
+    const currentEmployee = useCurrentEmployee(role, employees);
     const { clients, loading: clientsLoading, error: clientsError } = useClients();
     const { projects, loading: projectsLoading, error: projectsError } = useProjects();
     const { users } = useUsers();
-    const { tasks, setStatus, timeEntries, comments, logTime, addComment, loading: tasksLoading, error: tasksError } = useTasks();
+    const { tasks, setStatus, timeEntries, comments, logTime, addComment, loading: tasksLoading, error: tasksError } = useTasks({
+        taskId: id,
+        includeDetails: true,
+    });
     const task = tasks.find((item) => item.id === id) ?? null;
     const canViewTask = role !== 'EMPLOYEE' || (currentEmployee !== null && task?.assigned_to === currentEmployee.id);
     const [selectedStatus, setSelectedStatus] = useState<TaskStatus>(task?.status ?? 'TODO');

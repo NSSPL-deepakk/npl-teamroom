@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
-import { useEmployees } from '../data/employees';
+import { useAppData } from '../contexts/AppDataContext';
 import { formatHolidayDateTime, getComputedEmployeeEvents, getTodayIso, resolveEventImage, stripMarkdown, useHolidays, type HolidayCategory } from '../data/holidays';
 import type { Role } from '../data/roles';
 import { ConfirmDialog } from '../components/ConfirmDialog';
@@ -45,7 +45,7 @@ export default function HolidaysPage() {
   const { role } = useOutletContext<Ctx>();
   const canManage = role === 'SUPER_ADMIN' || role === 'HR';
   const { holidays, addHoliday, updateHoliday, removeHoliday } = useHolidays();
-  const { employees, updateEmployee } = useEmployees();
+  const { employees, updateEmployee } = useAppData();
 
   const [date, setDate] = useState('');
   const [eventTime, setEventTime] = useState('');

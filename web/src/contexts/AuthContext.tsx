@@ -58,12 +58,26 @@ function getAuthSessionId(accessToken: string): string | null {
   }
 }
 
+async function restoreActiveSession(session: Session): Promise<{ sessionId: string | null; error: string | null }> {
+  const authSessionId = getAuthSessionId(session.access_token);
+  if (!authSessionId) return { sessionId: null, error: 'Could not verify the Supabase authentication session.' };
+
+  const { data, error } = await supabase
+    .from('active_sessions')
+    .select('session_id, auth_session_id')
+    .eq('user_id', session.user.id)
+    .maybeSingle();
+
+  if (error) return { sessionId: null, error: error.message };
+  if (!data || data.auth_session_id !== authSessionId) return { sessionId: null, error: null };
+
+  sessionStorage.setItem('active_session_id', data.session_id);
+  return { sessionId: data.session_id, error: null };
+}
+
 async function claimActiveSession(session: Session): Promise<{ sessionId: string | null; error: string | null }> {
   const sessionId = crypto.randomUUID();
   const authSessionId = getAuthSessionId(session.access_token);
-  console.log("auth token", authSessionId);
-  const token = session.access_token;  // ← This is what you need
-  console.log("Full access token:", token);
   if (!authSessionId) return { sessionId: null, error: 'Could not verify the Supabase authentication session.' };
 
   const { error } = await supabase.from('active_sessions').upsert({
@@ -103,15 +117,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setActiveSessionId(sessionStorage.getItem('active_session_id'));
       if (data.session) {
         if (!sessionStorage.getItem('active_session_id') && !pendingLogin.current) {
-          clearClientSessionState();
-          await supabase.auth.signOut();
-          if (!cancelled) {
-            setSession(null);
-            setProfile(null);
-            setActiveSessionId(null);
-            setLoading(false);
+          const restored = await restoreActiveSession(data.session);
+          if (!restored.error && !restored.sessionId) {
+            clearClientSessionState();
+            await supabase.auth.signOut();
+            if (!cancelled) {
+              setSession(null);
+              setProfile(null);
+              setActiveSessionId(null);
+              setLoading(false);
+            }
+            return;
           }
-          return;
+          if (restored.sessionId && !cancelled) {
+            setActiveSessionId(restored.sessionId);
+          }
         }
         const p = await fetchProfile(data.session.user.id);
         if (!p) {
@@ -137,7 +157,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { data: listener } = supabase.auth.onAuthStateChange(async (event, newSession) => {
       if (event === 'TOKEN_REFRESHED') return;
 
-      setLoading(true);
       setSession(newSession);
       if (newSession) {
         if (pendingLogin.current) return;
@@ -153,7 +172,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
         setProfile(p);
         await recordActivity(newSession.user.id);
-      } else {
+      }
+      else {
         setProfile(null);
         setActiveSessionId(null);
         if (!signOutReasonRef.current) {

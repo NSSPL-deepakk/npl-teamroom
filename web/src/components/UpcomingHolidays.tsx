@@ -1,6 +1,6 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { useMemo } from 'react';
-import { formatHolidayDateTime, getTodayIso, resolveEventImage, stripMarkdown, useHolidays, type HolidayCategory } from '../data/holidays';
+import { formatHolidayDateTime, getTodayIso, resolveEventImage, stripMarkdown, type Holiday, type HolidayCategory } from '../data/holidays';
 import { useUpcomingEvents } from '../data/events';
 import type { Employee } from '../data/employees';
 
@@ -24,9 +24,8 @@ const TAG_STYLES: Record<string, { background: string; color: string }> = {
   'Work Anniversary': { background: '#F5F3FF', color: '#6D28D9' },
 };
 
-export function UpcomingHolidays({ canManage = false, employees = [] }: { canManage?: boolean; employees?: Employee[] }) {
+export function UpcomingHolidays({ holidays, canManage = false, employees = [] }: { holidays: Holiday[]; canManage?: boolean; employees?: Employee[] }) {
   const navigate = useNavigate();
-  const { holidays } = useHolidays();
   const upcomingEvents = useUpcomingEvents(employees, 5);
 
   const items = useMemo<UpcomingItem[]>(() => {

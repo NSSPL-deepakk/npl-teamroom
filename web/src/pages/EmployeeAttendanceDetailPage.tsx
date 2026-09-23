@@ -12,7 +12,8 @@ import {
     useAttendance,
     type AttendanceRecord,
 } from '../data/attendance';
-import { useEmployees, type WorkMode } from '../data/employees';
+import { type WorkMode } from '../data/employees';
+import { useAppData } from '../contexts/AppDataContext';
 import { classifyDay, useHolidays } from '../data/holidays';
 import { useLeaveRequests } from '../data/leave';
 import type { Role } from '../data/roles';
@@ -52,14 +53,22 @@ export default function EmployeeAttendanceDetailPage() {
     const { role } = useOutletContext<Context>();
     const params = useParams();
     const [searchParams] = useSearchParams();
-    const { employees } = useEmployees();
-    const { records, addManualEntry, updateAttendanceRecord, approveRecord, rejectRecord, audit, today, loading, error } = useAttendance();
+    const { employees } = useAppData();
     const { holidays } = useHolidays();
     const { requests: leaveRequests } = useLeaveRequests();
 
-    const employee = employees.find((item) => item.id === params.employeeId) ?? null;
     const month = Number(searchParams.get('month') ?? new Date().getMonth() + 1);
     const year = Number(searchParams.get('year') ?? new Date().getFullYear());
+    const attendanceStartDate = `${year}-${String(month).padStart(2, '0')}-01`;
+    const lastDayOfMonth = new Date(year, month, 0).getDate();
+    const attendanceEndDate = `${year}-${String(month).padStart(2, '0')}-${String(lastDayOfMonth).padStart(2, '0')}`;
+    const { records, addManualEntry, updateAttendanceRecord, approveRecord, rejectRecord, audit, today, loading, error } = useAttendance({
+        startDate: attendanceStartDate,
+        endDate: attendanceEndDate,
+        employeeId: params.employeeId,
+        includeAudit: true,
+    });
+    const employee = employees.find((item) => item.id === params.employeeId) ?? null;
 
     const [manualMode, setManualMode] = useState(false);
     const [manualForm, setManualForm] = useState({

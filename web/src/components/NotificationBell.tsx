@@ -5,13 +5,24 @@ import { supabase } from '../lib/supabase';
 type Notification = {
     id: string;
     kind: 'announcement_created' | 'leave_request_submitted';
+    reference_id: string | null;
     title: string;
     message: string;
     read_at: string | null;
     created_at: string;
 };
 
-const NOTIFICATION_COLUMNS = 'id, kind, title, message, read_at, created_at';
+const NOTIFICATION_COLUMNS = 'id, kind, reference_id, title, message, read_at, created_at';
+
+async function removeDeletedEventNotifications(items: Notification[]): Promise<Notification[]> {
+    const eventIds = items.filter((item) => item.kind === 'announcement_created' && item.reference_id).map((item) => item.reference_id as string);
+    if (eventIds.length === 0) return items;
+
+    const { data, error } = await supabase.from('holidays').select('id').in('id', eventIds);
+    if (error) return items;
+    const existingEventIds = new Set((data ?? []).map((event) => event.id));
+    return items.filter((item) => item.kind !== 'announcement_created' || !item.reference_id || existingEventIds.has(item.reference_id));
+}
 
 function formatNotificationDate(value: string): string {
     return new Date(value).toLocaleString('en-IN', {
@@ -42,13 +53,13 @@ export function NotificationBell({ userId }: { userId: string | undefined }) {
             .eq('recipient_user_id', userId)
             .order('created_at', { ascending: false })
             .limit(30)
-            .then(({ data, error: fetchError }) => {
+            .then(async ({ data, error: fetchError }) => {
                 if (cancelled) return;
                 if (fetchError) {
                     setError(fetchError.message);
                 } else {
                     setError(null);
-                    setNotifications((data ?? []) as Notification[]);
+                    setNotifications(await removeDeletedEventNotifications((data ?? []) as Notification[]));
                 }
                 setLoading(false);
             });
@@ -60,6 +71,13 @@ export function NotificationBell({ userId }: { userId: string | undefined }) {
                 { event: 'INSERT', schema: 'public', table: 'notifications', filter: `recipient_user_id=eq.${userId}` },
                 (payload) => {
                     setNotifications((current) => [payload.new as Notification, ...current.filter((item) => item.id !== payload.new.id)].slice(0, 30));
+                },
+            )
+            .on(
+                'postgres_changes',
+                { event: 'DELETE', schema: 'public', table: 'notifications' },
+                (payload) => {
+                    setNotifications((current) => current.filter((item) => item.id !== payload.old.id));
                 },
             )
             .subscribe((status) => {

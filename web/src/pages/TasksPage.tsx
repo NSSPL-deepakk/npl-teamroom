@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
 import { useClients } from '../data/clients';
 import { useCurrentEmployee } from '../data/currentUser';
-import { useEmployees } from '../data/employees';
+import { useAppData } from '../contexts/AppDataContext';
 import { useProjects } from '../data/projects';
 import { useTasks, type Task, type TaskPriority, type TaskStatus } from '../data/tasks';
 import { StatCard } from '../components/Ledger';
@@ -123,8 +123,8 @@ function TaskRow({
 export default function TasksPage() {
   const navigate = useNavigate();
   const { role } = useOutletContext<Ctx>();
-  const employee = useCurrentEmployee(role);
-  const { employees } = useEmployees();
+  const { employees } = useAppData();
+  const employee = useCurrentEmployee(role, employees);
   const { clients, loading: clientsLoading, error: clientsError } = useClients();
   const { projects, loading: projectsLoading, error: projectsError } = useProjects();
   const { tasks, setStatus, logHours, loading: tasksLoading, error: tasksError } = useTasks();

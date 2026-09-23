@@ -57,6 +57,28 @@ export interface AttendanceAuditEntry {
   reason: string;
 }
 
+// Keep these projections explicit to reduce Supabase PostgREST egress and database load.
+export const ATTENDANCE_SELECT = [
+  'id', 'employee_id', 'date', 'check_in', 'check_out', 'check_in_at', 'check_out_at',
+  'original_check_in', 'original_check_out', 'latitude', 'longitude', 'work_mode', 'status',
+  'is_manual_entry', 'manual_entry_reason', 'is_early_checkout', 'early_checkout_reason',
+  'overtime_minutes', 'overtime_reason', 'overtime_approval_status', 'overtime_approved_by',
+  'manual_approval_status', 'approved_by', 'approved_at', 'rejected_by', 'rejected_at',
+  'work_summary', 'work_done_today', 'is_overtime', 'updated_at', 'created_at',
+].join(', ') as 'id, employee_id, date, check_in, check_out, check_in_at, check_out_at, original_check_in, original_check_out, latitude, longitude, work_mode, status, is_manual_entry, manual_entry_reason, is_early_checkout, early_checkout_reason, overtime_minutes, overtime_reason, overtime_approval_status, overtime_approved_by, manual_approval_status, approved_by, approved_at, rejected_by, rejected_at, work_summary, work_done_today, is_overtime, updated_at, created_at';
+
+export const ATTENDANCE_AUDIT_SELECT = [
+  'id', 'record_id', 'changed_by', 'changed_on', 'previous_check_in', 'previous_check_out',
+  'updated_check_in', 'updated_check_out', 'reason', 'created_at',
+].join(', ') as 'id, record_id, changed_by, changed_on, previous_check_in, previous_check_out, updated_check_in, updated_check_out, reason, created_at';
+
+export type AttendanceOptions = {
+  startDate?: string;
+  endDate?: string;
+  employeeId?: string | null;
+  includeAudit?: boolean;
+};
+
 function minutesFromTime(time: string | null): number | null {
   if (!time) return null;
   const [hours, minutes] = time.split(':').map(Number);
@@ -222,7 +244,7 @@ export function hasOpenSession(records: AttendanceRecord[], employeeId: string, 
   );
 }
 
-export function useAttendance() {
+export function useAttendance(options: AttendanceOptions = {}) {
   const [records, setRecords] = useState<AttendanceRecord[]>([]);
   const [audit, setAudit] = useState<AttendanceAuditEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -230,20 +252,50 @@ export function useAttendance() {
 
   const refresh = useCallback(async () => {
     setLoading(true);
-    const [attendanceResult, auditResult] = await Promise.all([
-      supabase.from('attendance').select('*').order('date', { ascending: false }).order('check_in', { ascending: false }),
-      supabase.from('attendance_audit').select('*').order('created_at', { ascending: false }),
-    ]);
-    const fetchError = attendanceResult.error ?? auditResult.error;
-    if (fetchError) {
-      setError(fetchError.message);
-    } else {
-      setError(null);
-      setRecords((attendanceResult.data ?? []).map((row) => normalizeRecord(row as Partial<AttendanceRecord>)));
-      setAudit((auditResult.data ?? []) as AttendanceAuditEntry[]);
+    // Date and employee filters are intentional: avoid loading the entire attendance table.
+    let attendanceQuery = supabase
+      .from('attendance')
+      .select(ATTENDANCE_SELECT)
+      .order('date', { ascending: false })
+      .order('check_in', { ascending: false });
+    if (options.startDate) attendanceQuery = attendanceQuery.gte('date', options.startDate);
+    if (options.endDate) attendanceQuery = attendanceQuery.lte('date', options.endDate);
+    if (!options.startDate && !options.endDate) {
+      const currentDate = today();
+      attendanceQuery = attendanceQuery.gte('date', currentDate).lte('date', currentDate);
     }
+    if (options.employeeId) attendanceQuery = attendanceQuery.eq('employee_id', options.employeeId);
+
+    const attendanceResult = await attendanceQuery;
+    if (attendanceResult.error) {
+      setError(attendanceResult.error.message);
+      setLoading(false);
+      return;
+    }
+
+    const attendanceRows = attendanceResult.data ?? [];
+    let auditRows: AttendanceAuditEntry[] = [];
+    if (options.includeAudit && attendanceRows.length > 0) {
+      // Audit data is scoped to the already selected records to avoid an unbounded audit read.
+      const recordIds = attendanceRows.map((row) => row.id);
+      const auditResult = await supabase
+        .from('attendance_audit')
+        .select(ATTENDANCE_AUDIT_SELECT)
+        .in('record_id', recordIds)
+        .order('created_at', { ascending: false });
+      if (auditResult.error) {
+        setError(auditResult.error.message);
+        setLoading(false);
+        return;
+      }
+      auditRows = (auditResult.data ?? []) as AttendanceAuditEntry[];
+    }
+
+    setError(null);
+    setRecords(attendanceRows.map((row) => normalizeRecord(row as Partial<AttendanceRecord>)));
+    setAudit(auditRows);
     setLoading(false);
-  }, []);
+  }, [options.startDate, options.endDate, options.employeeId, options.includeAudit]);
 
   useEffect(() => { void refresh(); }, [refresh]);
 
@@ -257,7 +309,7 @@ export function useAttendance() {
           check_in_at: new Date().toISOString(),
           latitude: coords?.latitude ?? null, longitude: coords?.longitude ?? null,
           work_mode: workMode, status: 'PRESENT', is_overtime: isOvertime, overtime_approval_status: isOvertime ? 'pending' : null, mats: new Date().toISOString(),
-        }).select('*').single();
+        }).select(ATTENDANCE_SELECT).single();
         if (insertError) { setError(insertError.message); return; }
         setError(null);
         setRecords((prev) => [normalizeRecord(data as Partial<AttendanceRecord>), ...prev]);
@@ -277,7 +329,7 @@ export function useAttendance() {
       const { data, error: updateError } = await supabase.from('attendance').update({
         check_out: nowHM(), check_out_at: new Date().toISOString(), status: 'PRESENT',
         work_done_today: workDoneToday.trim() || null, mats: new Date().toISOString(),
-      }).eq('id', open.id).select('*').single();
+      }).eq('id', open.id).select(ATTENDANCE_SELECT).single();
       if (updateError) { setError(updateError.message); return; }
       setError(null);
       setRecords((prev) => prev.map((record) => record.id === open.id ? normalizeRecord(data as Partial<AttendanceRecord>) : record));
@@ -315,7 +367,7 @@ export function useAttendance() {
           manual_approval_status: 'pending', is_overtime: draft.is_overtime ?? record.overtime_minutes > 0,
           work_done_today: draft.work_done_today ?? null,
           mats: new Date().toISOString(),
-        }).select('*').single();
+        }).select(ATTENDANCE_SELECT).single();
         if (insertError) { setError(insertError.message); return; }
         setError(null);
         setRecords((prev) => [normalizeRecord(data as Partial<AttendanceRecord>), ...prev]);
@@ -344,13 +396,13 @@ export function useAttendance() {
           overtime_minutes: next.overtime_minutes, overtime_reason: next.overtime_reason,
           overtime_approval_status: next.overtime_approval_status, is_overtime: next.overtime_minutes > 0,
           manual_approval_status: 'pending', mats: new Date().toISOString(),
-        }).eq('id', recordId).select('*').single();
+        }).eq('id', recordId).select(ATTENDANCE_SELECT).single();
         if (updateError) { setError(updateError.message); return; }
         const { data: auditData, error: auditError } = await supabase.from('attendance_audit').insert({
           record_id: recordId, changed_by: 'Authenticated user',
           previous_check_in: previous.check_in, previous_check_out: previous.check_out,
           updated_check_in: next.check_in, updated_check_out: next.check_out, reason: reason.trim(),
-        }).select('*').single();
+        }).select(ATTENDANCE_AUDIT_SELECT).single();
         if (auditError) { setError(auditError.message); return; }
         setError(null);
         setRecords((prev) => prev.map((record) => record.id === recordId ? normalizeRecord(data as Partial<AttendanceRecord>) : record));
@@ -374,7 +426,7 @@ export function useAttendance() {
         rejected_by: status === 'rejected' ? approverId : null,
         rejected_at: status === 'rejected' ? new Date().toISOString() : null,
         mats: new Date().toISOString(),
-      }).eq('id', recordId).select('*').single();
+      }).eq('id', recordId).select(ATTENDANCE_SELECT).single();
       if (updateError) { setError(updateError.message); return; }
       setError(null);
       setRecords((prev) => prev.map((record) => record.id === recordId ? normalizeRecord(data as Partial<AttendanceRecord>) : record));

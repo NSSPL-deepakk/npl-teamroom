@@ -1,6 +1,6 @@
 import { useOutletContext } from 'react-router-dom';
-import { useEmployees, type Employee } from '../data/employees';
-import { useDesignations } from '../data/designations';
+import type { Employee } from '../data/employees';
+import { useAppData } from '../contexts/AppDataContext';
 import type { Role } from '../data/roles';
 
 type Ctx = { role: Role };
@@ -53,8 +53,7 @@ function OrgNode({
 
 export default function OrgChartPage() {
   const { role } = useOutletContext<Ctx>();
-  const { employees } = useEmployees();
-  const { designations } = useDesignations();
+  const { employees, designations } = useAppData();
 
   const designationName = (id: string) => designations.find((d) => d.id === id)?.name ?? '—';
   const roots = employees.filter((e) => !e.manager_id || !employees.some((m) => m.id === e.manager_id));

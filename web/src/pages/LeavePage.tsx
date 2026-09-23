@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
-import { useEmployees } from '../data/employees';
+import { useAppData } from '../contexts/AppDataContext';
 import { leaveDayCount, useLeaveRequests, type LeaveRequest, type LeaveType } from '../data/leave';
 import { Drawer } from '../components/Drawer';
 import { ConfirmDialog } from '../components/ConfirmDialog';
@@ -109,7 +109,7 @@ function RequestRow({
 export default function LeavePage() {
   const { role } = useOutletContext<Ctx>();
   const { profile } = useAuth();
-  const { employees } = useEmployees();
+  const { employees } = useAppData();
   const { requests, requestLeave, updateRequest, approve, reject } = useLeaveRequests();
   const employee = profile?.employee_id ? employees.find((item) => item.id === profile.employee_id) ?? null : null;
 

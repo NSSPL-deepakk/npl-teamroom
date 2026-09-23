@@ -101,7 +101,12 @@ const TASK_SELECT = 'id, title, description, project_id, status, priority, assig
 const LOG_SELECT = 'id, task_id, logged_by, hours, logged_at, employees(name)';
 const COMMENT_SELECT = 'id, task_id, author_id, body, created_at, employees(name)';
 
-export function useTasks() {
+export type TaskOptions = {
+    taskId?: string | null;
+    includeDetails?: boolean;
+};
+
+export function useTasks(options: TaskOptions = {}) {
     const [tasks, setTasks] = useState<Task[]>([]);
     const [timeEntries, setTimeEntries] = useState<TaskTimeEntry[]>([]);
     const [comments, setComments] = useState<TaskComment[]>([]);
@@ -110,28 +115,42 @@ export function useTasks() {
 
     const refresh = useCallback(async () => {
         setLoading(true);
-        const [taskResult, logResult, commentResult] = await Promise.all([
-            supabase.from('tasks').select(TASK_SELECT).order('created_at', { ascending: false }),
-            supabase.from('task_time_logs').select(LOG_SELECT).order('logged_at', { ascending: true }),
-            supabase.from('task_comments').select(COMMENT_SELECT).order('created_at', { ascending: true }),
-        ]);
-        const firstError = taskResult.error ?? logResult.error ?? commentResult.error;
-        if (firstError) {
-            setError(firstError.message);
-        } else {
-            setError(null);
-            setTasks((taskResult.data ?? []).map((row) => fromTaskRow(row as TaskRow)));
-            setTimeEntries((logResult.data ?? []).map((row) => {
-                const item = row as TimeLogRow;
-                return { id: item.id, task_id: item.task_id, logged_at: item.logged_at, hours: Number(item.hours), logged_by: first(item.employees)?.name ?? item.logged_by ?? 'Unknown' };
-            }));
-            setComments((commentResult.data ?? []).map((row) => {
-                const item = row as CommentRow;
-                return { id: item.id, task_id: item.task_id, commenter: first(item.employees)?.name ?? item.author_id ?? 'Unknown', timestamp: item.created_at, text: item.body };
-            }));
+        const taskResult = await supabase.from('tasks').select(TASK_SELECT).order('created_at', { ascending: false });
+        if (taskResult.error) {
+            setError(taskResult.error.message);
+            setLoading(false);
+            return;
         }
+
+        let logRows: TimeLogRow[] = [];
+        let commentRows: CommentRow[] = [];
+        if (options.includeDetails && options.taskId) {
+            const [logResult, commentResult] = await Promise.all([
+                supabase.from('task_time_logs').select(LOG_SELECT).eq('task_id', options.taskId).order('logged_at', { ascending: true }),
+                supabase.from('task_comments').select(COMMENT_SELECT).eq('task_id', options.taskId).order('created_at', { ascending: true }),
+            ]);
+            const detailsError = logResult.error ?? commentResult.error;
+            if (detailsError) {
+                setError(detailsError.message);
+                setLoading(false);
+                return;
+            }
+            logRows = (logResult.data ?? []) as TimeLogRow[];
+            commentRows = (commentResult.data ?? []) as CommentRow[];
+        }
+
+        setError(null);
+        setTasks((taskResult.data ?? []).map((row) => fromTaskRow(row as TaskRow)));
+        setTimeEntries(logRows.map((row) => {
+            const item = row as TimeLogRow;
+            return { id: item.id, task_id: item.task_id, logged_at: item.logged_at, hours: Number(item.hours), logged_by: first(item.employees)?.name ?? item.logged_by ?? 'Unknown' };
+        }));
+        setComments(commentRows.map((row) => {
+            const item = row as CommentRow;
+            return { id: item.id, task_id: item.task_id, commenter: first(item.employees)?.name ?? item.author_id ?? 'Unknown', timestamp: item.created_at, text: item.body };
+        }));
         setLoading(false);
-    }, []);
+    }, [options.taskId, options.includeDetails]);
 
     useEffect(() => { void refresh(); }, [refresh]);
 

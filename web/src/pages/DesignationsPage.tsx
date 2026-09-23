@@ -1,8 +1,6 @@
 import { useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
-import { useDesignations } from '../data/designations';
-import { useDepartments } from '../data/departments';
-import { useEmployees } from '../data/employees';
+import { useAppData } from '../contexts/AppDataContext';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import type { Role } from '../data/roles';
 
@@ -13,9 +11,7 @@ const inputStyle = { borderColor: 'var(--line)', borderRadius: 'var(--radius-sm)
 export default function DesignationsPage() {
   const { role } = useOutletContext<Ctx>();
   const canManage = role === 'SUPER_ADMIN';
-  const { designations, addDesignation, removeDesignation } = useDesignations();
-  const { departments } = useDepartments();
-  const { employees } = useEmployees();
+  const { designations, addDesignation, removeDesignation, departments, employees } = useAppData();
   const [name, setName] = useState('');
   const [departmentId, setDepartmentId] = useState('');
   const [removeId, setRemoveId] = useState<string | null>(null);

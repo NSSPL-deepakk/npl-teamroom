@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
-import { useEmployees, type Employee, type WorkMode } from '../data/employees';
-import { useDepartments } from '../data/departments';
-import { useDesignations } from '../data/designations';
+import { type Employee, type WorkMode } from '../data/employees';
+import { useRecruitment } from '../data/recruitment';
+import { useOnboarding, type OnboardingRecord } from '../data/onboarding';
+import { useAppData } from '../contexts/AppDataContext';
 import { useEmployeeDocuments, type DocumentCategory } from '../data/employeeDocuments';
 import { createEmployeeAccount, useEmployeeAccounts } from '../lib/employeeAccounts';
 import { Drawer } from '../components/Drawer';
@@ -12,6 +13,7 @@ import type { Role } from '../data/roles';
 
 type Ctx = { role: Role };
 type EmployeeToggle = { id: string; action: 'activate' | 'deactivate' } | null;
+type EmployeeSource = 'MANUAL' | 'ONBOARDING';
 
 const WORK_MODES: WorkMode[] = ['OFFICE', 'WFH', 'HYBRID'];
 const EMPLOYEE_ROLE_OPTIONS: Exclude<Role, 'SUPER_ADMIN'>[] = ['EMPLOYEE', 'MANAGER', 'HR'];
@@ -64,10 +66,10 @@ export default function EmployeesPage() {
   const { role } = useOutletContext<Ctx>();
   const canManage = role === 'SUPER_ADMIN' || role === 'HR';
 
-  const { employees, addEmployee, updateEmployee, toggleStatus } = useEmployees();
+  const { employees, addEmployee, updateEmployee, toggleEmployeeStatus: toggleStatus, refreshEmployees, departments, designations } = useAppData();
   const { accounts, refresh: refreshAccounts } = useEmployeeAccounts();
-  const { departments } = useDepartments();
-  const { designations } = useDesignations();
+  const { candidates, openings } = useRecruitment();
+  const { records: onboardingRecords, activateEmployee, refresh: refreshOnboarding, loading: onboardingLoading } = useOnboarding(candidates);
 
   const deptName = (id: string) => departments.find((d) => d.id === id)?.name ?? '—';
   const designationName = (id: string) => designations.find((d) => d.id === id)?.name ?? '—';
@@ -81,9 +83,12 @@ export default function EmployeesPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
+  const [employeeSource, setEmployeeSource] = useState<EmployeeSource>('MANUAL');
+  const [selectedOnboardingId, setSelectedOnboardingId] = useState('');
   const [passwordError, setPasswordError] = useState('');
   const [submitError, setSubmitError] = useState('');
-  const { designations: departmentDesignations } = useDesignations(form.department_id || undefined);
+  const departmentDesignations = designations.filter((designation) => !form.department_id || designation.department_id === form.department_id);
+  const eligibleOnboardingRecords = useMemo(() => onboardingRecords.filter((record) => !record.employee_id), [onboardingRecords]);
 
   const managerCandidates = useMemo(
     () =>
@@ -134,9 +139,31 @@ export default function EmployeesPage() {
   function openAdd() {
     setEditingId(null);
     setForm(EMPTY_FORM);
+    setEmployeeSource('MANUAL');
+    setSelectedOnboardingId('');
     setPasswordError('');
     setSubmitError('');
     setDrawerOpen(true);
+  }
+
+  function selectEmployeeSource(source: EmployeeSource) {
+    setEmployeeSource(source);
+    setSelectedOnboardingId('');
+    setForm(EMPTY_FORM);
+    setPasswordError('');
+    setSubmitError('');
+  }
+
+  function selectOnboardingRecord(record: OnboardingRecord | null) {
+    setSelectedOnboardingId(record?.id ?? '');
+    if (!record) return;
+    setForm((current) => ({
+      ...current,
+      name: record.personal?.full_name || record.candidate.name,
+      email: record.personal?.personal_email || record.candidate.email,
+      phone: record.personal?.phone || record.candidate.phone,
+      joining_date: record.joining_date,
+    }));
   }
 
   function openEdit(emp: Employee) {
@@ -161,7 +188,7 @@ export default function EmployeesPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!form.name.trim() || !form.email.trim() || !form.department_id || !form.designation_id || !form.joining_date || (!editingId && !form.role)) {
+    if (!form.name.trim() || !form.email.trim() || !form.department_id || !form.designation_id || !form.joining_date || (!editingId && !form.role) || (!editingId && employeeSource === 'ONBOARDING' && !selectedOnboardingId)) {
       return;
     }
     if (!editingId && form.password.length < 8) {
@@ -188,6 +215,13 @@ export default function EmployeesPage() {
       if (!form.role) return;
       const employeeId = await addEmployee({ ...payload, employment_status: 'ACTIVE' });
       if (employeeId) {
+        if (employeeSource === 'ONBOARDING') {
+          const onboardingRecord = onboardingRecords.find((record) => record.id === selectedOnboardingId);
+          if (!onboardingRecord || !(await activateEmployee(onboardingRecord.id, employeeId))) {
+            setSubmitError('Employee was created, but the onboarding record could not be linked.');
+            return;
+          }
+        }
         const { error: accountError } = await createEmployeeAccount({
           employee_id: employeeId,
           email: payload.email,
@@ -201,12 +235,17 @@ export default function EmployeesPage() {
           return;
         }
         await refreshAccounts();
+        await refreshEmployees();
+        if (employeeSource === 'ONBOARDING') await refreshOnboarding();
       } else {
         setSubmitError('Could not create employee. Check the browser console for the Supabase error.');
         return;
       }
     }
     setPasswordError('');
+    setForm(EMPTY_FORM);
+    setEmployeeSource('MANUAL');
+    setSelectedOnboardingId('');
     setDrawerOpen(false);
   }
 
@@ -339,7 +378,7 @@ export default function EmployeesPage() {
                     Edit
                   </button>
                   <button
-                    onClick={() => toggleStatus(emp.id)}
+                    onClick={() => setEmployeeToggle({ id: emp.id, action: emp.employment_status === 'ACTIVE' ? 'deactivate' : 'activate' })}
                     className="font-mono text-[11px] uppercase tracking-wide hover:underline"
                     style={{ color: emp.employment_status === 'ACTIVE' ? 'var(--status-absent)' : 'var(--status-present)' }}
                   >
@@ -363,6 +402,36 @@ export default function EmployeesPage() {
               style={{ borderColor: 'var(--status-absent)', background: 'var(--status-absent-bg)', color: 'var(--status-absent)' }}
             >
               {submitError}
+            </div>
+          )}
+          {!editingId && (
+            <div className="border-b pb-4" style={{ borderColor: 'var(--line-soft)' }}>
+              <Field label="Employee source">
+                <div className="flex gap-4 text-sm">
+                  <label className="flex items-center gap-2">
+                    <input type="radio" name="employee-source" value="MANUAL" checked={employeeSource === 'MANUAL'} onChange={() => selectEmployeeSource('MANUAL')} />
+                    Manual
+                  </label>
+                  <label className="flex items-center gap-2">
+                    <input type="radio" name="employee-source" value="ONBOARDING" checked={employeeSource === 'ONBOARDING'} onChange={() => selectEmployeeSource('ONBOARDING')} />
+                    From Onboarding
+                  </label>
+                </div>
+              </Field>
+              {employeeSource === 'ONBOARDING' && (
+                <div className="mt-4">
+                  <Field label="Onboarding employee">
+                    <select required value={selectedOnboardingId} onChange={(event) => selectOnboardingRecord(eligibleOnboardingRecords.find((record) => record.id === event.target.value) ?? null)} className="w-full border px-3 py-2 text-sm outline-none" style={inputStyle}>
+                      <option value="">{onboardingLoading ? 'Loading onboarding employees…' : eligibleOnboardingRecords.length === 0 ? 'No eligible onboarding employees' : 'Select onboarding employee'}</option>
+                      {eligibleOnboardingRecords.map((record) => (
+                        <option key={record.id} value={record.id}>
+                          {record.candidate.name} · {record.personal?.personal_email || record.candidate.email} · {openings.find((opening) => opening.id === record.candidate.opening_id)?.department ?? '—'} · Joining {record.joining_date} · {record.status}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                </div>
+              )}
             </div>
           )}
           <Field label="Full name">

@@ -50,12 +50,21 @@ export interface Offer {
 
 type OpeningDraft = Omit<JobOpening, 'id' | 'job_code' | 'created_date'>;
 type CandidateDraft = Omit<Candidate, 'id' | 'interview_date'> & { interview_date?: string };
+export type RecruitmentOptions = {
+    includeInterviews?: boolean;
+    includeOffers?: boolean;
+};
+
+const JOB_OPENING_SELECT = 'id, job_code, title, department, hiring_manager, positions, employment_type, experience, location, description, status, created_date';
+const CANDIDATE_SELECT = 'id, name, email, phone, opening_id, experience, source, stage, interview_date, feedback';
+const INTERVIEW_SELECT = 'id, candidate_id, scheduled_at, status, notes';
+const OFFER_SELECT = 'id, candidate_id, status, sent_at';
 
 function recruitmentError(error: { message: string } | null, fallback: string): string | null {
     return error ? `${fallback}: ${error.message}` : null;
 }
 
-export function useRecruitment() {
+export function useRecruitment(options: RecruitmentOptions = {}) {
     const [openings, setOpenings] = useState<JobOpening[]>([]);
     const [candidates, setCandidates] = useState<Candidate[]>([]);
     const [interviews, setInterviews] = useState<Interview[]>([]);
@@ -66,24 +75,45 @@ export function useRecruitment() {
 
     const refresh = useCallback(async () => {
         setLoading(true);
-        const [openingsResult, candidatesResult, interviewsResult, offersResult] = await Promise.all([
-            supabase.from('job_openings').select('*').order('created_date', { ascending: false }),
-            supabase.from('candidates').select('*').order('created_at', { ascending: false }),
-            supabase.from('interviews').select('*').order('scheduled_at', { ascending: true }),
-            supabase.from('offers').select('*').order('sent_at', { ascending: false }),
+        const [openingsResult, candidatesResult] = await Promise.all([
+            supabase.from('job_openings').select(JOB_OPENING_SELECT).order('created_date', { ascending: false }),
+            supabase.from('candidates').select(CANDIDATE_SELECT).order('created_at', { ascending: false }),
         ]);
-        const firstError = openingsResult.error ?? candidatesResult.error ?? interviewsResult.error ?? offersResult.error;
-        if (firstError) {
-            setError(firstError.message);
-        } else {
-            setError(null);
-            setOpenings((openingsResult.data ?? []) as JobOpening[]);
-            setCandidates((candidatesResult.data ?? []) as Candidate[]);
-            setInterviews((interviewsResult.data ?? []) as Interview[]);
-            setOffers((offersResult.data ?? []) as Offer[]);
+        const baseError = openingsResult.error ?? candidatesResult.error;
+        if (baseError) {
+            setError(baseError.message);
+            setLoading(false);
+            return;
         }
+
+        let interviewRows: Interview[] = [];
+        let offerRows: Offer[] = [];
+        if (options.includeInterviews || options.includeOffers) {
+            const [interviewsResult, offersResult] = await Promise.all([
+                options.includeInterviews
+                    ? supabase.from('interviews').select(INTERVIEW_SELECT).order('scheduled_at', { ascending: true })
+                    : Promise.resolve({ data: [], error: null }),
+                options.includeOffers
+                    ? supabase.from('offers').select(OFFER_SELECT).order('sent_at', { ascending: false })
+                    : Promise.resolve({ data: [], error: null }),
+            ]);
+            const detailsError = interviewsResult.error ?? offersResult.error;
+            if (detailsError) {
+                setError(detailsError.message);
+                setLoading(false);
+                return;
+            }
+            interviewRows = (interviewsResult.data ?? []) as Interview[];
+            offerRows = (offersResult.data ?? []) as Offer[];
+        }
+
+        setError(null);
+        setOpenings((openingsResult.data ?? []) as JobOpening[]);
+        setCandidates((candidatesResult.data ?? []) as Candidate[]);
+        setInterviews(interviewRows);
+        setOffers(offerRows);
         setLoading(false);
-    }, []);
+    }, [options.includeInterviews, options.includeOffers]);
 
     useEffect(() => { void refresh(); }, [refresh]);
 

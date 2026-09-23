@@ -1,21 +1,19 @@
 import { useMemo, useState } from 'react';
-import { useEmployees, type Employee } from '../data/employees';
-import { useDepartments, type Department } from '../data/departments';
+import type { Employee } from '../data/employees';
+import type { Department } from '../data/departments';
+import { useAppData } from '../contexts/AppDataContext';
 import { StatCard, LedgerPanel } from '../components/Ledger';
 
-type ReportSelection = 'active' | 'inactive' | 'attrition' | 'departments' | `department:${string}`;
+type ReportSelection = 'active' | 'inactive' | 'total' | 'departments' | `department:${string}`;
 
 export default function ReportsPage() {
-  const { employees, loading: employeesLoading, error: employeesError } = useEmployees();
-  const { departments, loading: departmentsLoading, error: departmentsError } = useDepartments();
+  const { employees, employeesLoading, employeesError, departments, departmentsLoading, departmentsError } = useAppData();
   const [selection, setSelection] = useState<ReportSelection>('active');
 
   const now = new Date();
 
   const activeCount = employees.filter((e) => e.employment_status === 'ACTIVE').length;
   const inactiveCount = employees.length - activeCount;
-
-  const attritionRate = employees.length > 0 ? Math.round((inactiveCount / employees.length) * 1000) / 10 : 0;
 
   const deptBreakdown = useMemo(
     () =>
@@ -31,7 +29,8 @@ export default function ReportsPage() {
     : null;
   const selectedEmployees = useMemo(() => {
     if (selection === 'active') return employees.filter((employee) => employee.employment_status === 'ACTIVE');
-    if (selection === 'inactive' || selection === 'attrition') return employees.filter((employee) => employee.employment_status === 'INACTIVE');
+    if (selection === 'inactive') return employees.filter((employee) => employee.employment_status === 'INACTIVE');
+    if (selection === 'total') return employees;
     if (selectedDepartmentId) return employees.filter((employee) => employee.department_id === selectedDepartmentId);
     return [];
   }, [employees, selectedDepartmentId, selection]);
@@ -39,7 +38,7 @@ export default function ReportsPage() {
   const reportTitle = selectedDepartment?.name ?? (
     selection === 'active' ? 'Active employees' :
       selection === 'inactive' ? 'Inactive employees' :
-        selection === 'attrition' ? 'Attrition report' :
+        selection === 'total' ? 'Total employees' :
           selection === 'departments' ? 'Department report' : 'Report details'
   );
   const reportDescription = selectedDepartment
@@ -65,7 +64,7 @@ export default function ReportsPage() {
       <div className="mt-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
         <StatCard label="Headcount (active)" value={activeCount} status="present" selected={selection === 'active'} onClick={() => setSelection('active')} />
         <StatCard label="Inactive" value={inactiveCount} status="neutral" selected={selection === 'inactive'} onClick={() => setSelection('inactive')} />
-        <StatCard label="Attrition rate" value={`${attritionRate}%`} status={attritionRate > 10 ? 'absent' : 'structure'} selected={selection === 'attrition'} onClick={() => setSelection('attrition')} />
+        <StatCard label="Total employees" value={employees.length} status="structure" selected={selection === 'total'} onClick={() => setSelection('total')} />
         <StatCard label="Departments" value={departments.length} status="structure" selected={selection === 'departments'} onClick={() => setSelection('departments')} />
       </div>
 

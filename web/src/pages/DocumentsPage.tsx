@@ -1,9 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { useCompanyDocuments, type CompanyDocCategory, type CompanyDocVisibility } from '../data/companyDocuments';
-import { useEmployees } from '../data/employees';
-import { useDepartments } from '../data/departments';
-import { useDesignations } from '../data/designations';
+import { useAppData } from '../contexts/AppDataContext';
 import { supabase } from '../lib/supabase';
 import { Drawer } from '../components/Drawer';
 import { ConfirmDialog } from '../components/ConfirmDialog';
@@ -18,9 +16,7 @@ export default function DocumentsPage() {
   const { role } = useOutletContext<Ctx>();
   const canManage = role === 'SUPER_ADMIN' || role === 'HR';
   const { documents, loading, error, addDocument, removeDocument, openDocument } = useCompanyDocuments();
-  const { employees } = useEmployees();
-  const { departments } = useDepartments();
-  const { designations } = useDesignations();
+  const { employees, departments, designations } = useAppData();
 
   const [showModal, setShowModal] = useState(false);
   const [file, setFile] = useState<File | null>(null);

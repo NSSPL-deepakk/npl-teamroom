@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
-import { useEmployees } from '../data/employees';
+import { useAppData } from '../contexts/AppDataContext';
 import { formatHolidayDateTime, getComputedEmployeeEvents, resolveEventImage, useHolidays, type HolidayCategory } from '../data/holidays';
 
 type EventDetailData = {
@@ -36,7 +36,7 @@ export default function EventDetailPage() {
     const navigate = useNavigate();
     const { id } = useParams();
     const { state } = useLocation() as { state?: { event?: EventDetailData } };
-    const { employees } = useEmployees();
+    const { employees } = useAppData();
     const { holidays } = useHolidays();
 
     const event = useMemo<EventDetailData | null>(() => {

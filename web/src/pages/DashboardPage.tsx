@@ -6,15 +6,14 @@ import { RosterStrip } from '../components/RosterStrip';
 import { AttendanceDonut } from '../components/AttendanceDonut';
 import { UpcomingHolidays } from '../components/UpcomingHolidays';
 import { QuickLinks } from '../components/QuickLinks';
-import { useEmployees } from '../data/employees';
-import { useDepartments } from '../data/departments';
-import { countHolidaysThisYear, useHolidays } from '../data/holidays';
+import { countHolidaysThisYear, useHolidays, type Holiday } from '../data/holidays';
 import { supabase } from '../lib/supabase';
 import { useCurrentEmployee } from '../data/currentUser';
 import { useTasks } from '../data/tasks';
 import { useAttendance } from '../data/attendance';
 import { leaveDayCount, useLeaveRequests } from '../data/leave';
 import { useAuth } from '../contexts/AuthContext';
+import { useAppData } from '../contexts/AppDataContext';
 
 type Ctx = { role: Role };
 
@@ -38,10 +37,8 @@ function useProfileCounts() {
   return counts;
 }
 
-function SuperAdminDashboard() {
-  const { employees } = useEmployees();
-  const { departments } = useDepartments();
-  const { holidays } = useHolidays();
+function SuperAdminDashboard({ holidays }: { holidays: Holiday[] }) {
+  const { employees, departments } = useAppData();
   const { users, activeUsers } = useProfileCounts();
   return (
     <>
@@ -66,7 +63,7 @@ function SuperAdminDashboard() {
             />
           </div>
         </LedgerPanel>
-        <UpcomingHolidays canManage employees={employees} />
+        <UpcomingHolidays holidays={holidays} canManage employees={employees} />
       </div>
     </>
   );
@@ -106,14 +103,13 @@ function useHrRecruitmentData() {
   return { ...data, loading, error };
 }
 
-function HRDashboard() {
+function HRDashboard({ holidays, holidaysLoading, holidaysError }: { holidays: Holiday[]; holidaysLoading: boolean; holidaysError: string | null }) {
   const navigate = useNavigate();
-  const { employees, loading: employeesLoading, error: employeesError } = useEmployees();
-  const { holidays, loading: holidaysLoading, error: holidaysError } = useHolidays();
-  const { records, loading: attendanceLoading, error: attendanceError } = useAttendance();
+  const { employees, employeesLoading, employeesError } = useAppData();
+  const today = new Date().toLocaleDateString('en-CA');
+  const { records, loading: attendanceLoading, error: attendanceError } = useAttendance({ startDate: today, endDate: today });
   const { requests, loading: leaveLoading, error: leaveError } = useLeaveRequests();
   const recruitment = useHrRecruitmentData();
-  const today = new Date().toLocaleDateString('en-CA');
   const year = new Date().getFullYear();
   const month = new Date().getMonth();
   const activeEmployees = employees.filter((employee) => employee.employment_status === 'ACTIVE');
@@ -159,7 +155,7 @@ function HRDashboard() {
             />
           </div>
         </LedgerPanel>
-        <UpcomingHolidays canManage />
+        <UpcomingHolidays holidays={holidays} canManage />
       </div>
 
       <div className="mt-6 grid gap-6 lg:grid-cols-2">
@@ -174,14 +170,13 @@ function HRDashboard() {
   );
 }
 
-function ManagerDashboard() {
-  const { employees } = useEmployees();
-  const { departments, loading: departmentsLoading, error: departmentsError } = useDepartments();
-  const { records, loading: attendanceLoading, error: attendanceError } = useAttendance();
+function ManagerDashboard({ holidays }: { holidays: Holiday[] }) {
+  const { employees, departments, departmentsLoading, departmentsError } = useAppData();
+  const today = new Date().toLocaleDateString('en-CA');
+  const { records, loading: attendanceLoading, error: attendanceError } = useAttendance({ startDate: today, endDate: today });
   const { requests, loading: leaveLoading, error: leaveError } = useLeaveRequests();
   const { tasks, loading: tasksLoading, error: tasksError } = useTasks();
   const { profile, loading: authLoading } = useAuth();
-  const today = new Date().toLocaleDateString('en-CA');
   const managerId = profile?.employee_id ?? null;
   const teamMembers = employees.filter((employee) => employee.employment_status === 'ACTIVE' && employee.manager_id === managerId);
   const teamMemberIds = new Set(teamMembers.map((employee) => employee.id));
@@ -236,7 +231,7 @@ function ManagerDashboard() {
             />
           </div>
         </LedgerPanel>
-        <UpcomingHolidays employees={employees} />
+        <UpcomingHolidays holidays={holidays} employees={employees} />
       </div>
 
       <div className="mt-6 grid gap-6 lg:grid-cols-2">
@@ -266,9 +261,9 @@ function ManagerDashboard() {
   );
 }
 
-function EmployeeDashboard({ role }: { role: Role }) {
-  const { employees } = useEmployees();
-  const employee = useCurrentEmployee(role);
+function EmployeeDashboard({ role, holidays }: { role: Role; holidays: Holiday[] }) {
+  const { employees } = useAppData();
+  const employee = useCurrentEmployee(role, employees);
   const { tasks } = useTasks();
   const myTasks = employee ? tasks.filter((t) => t.assigned_to === employee.id).slice(0, 4) : [];
   const openCount = myTasks.filter((t) => t.status !== 'COMPLETED').length;
@@ -315,7 +310,7 @@ function EmployeeDashboard({ role }: { role: Role }) {
             />
           </div>
         </div>
-        <UpcomingHolidays employees={employees} />
+        <UpcomingHolidays holidays={holidays} employees={employees} />
       </div>
 
       <div className="mt-6 grid gap-6 lg:grid-cols-2">
@@ -334,12 +329,13 @@ function EmployeeDashboard({ role }: { role: Role }) {
 
 export default function DashboardPage() {
   const { role } = useOutletContext<Ctx>();
+  const { holidays, loading: holidaysLoading, error: holidaysError } = useHolidays();
 
   const view = {
-    SUPER_ADMIN: <SuperAdminDashboard />,
-    HR: <HRDashboard />,
-    MANAGER: <ManagerDashboard />,
-    EMPLOYEE: <EmployeeDashboard role={role} />,
+    SUPER_ADMIN: <SuperAdminDashboard holidays={holidays} />,
+    HR: <HRDashboard holidays={holidays} holidaysLoading={holidaysLoading} holidaysError={holidaysError} />,
+    MANAGER: <ManagerDashboard holidays={holidays} />,
+    EMPLOYEE: <EmployeeDashboard role={role} holidays={holidays} />,
   }[role];
 
   return (
