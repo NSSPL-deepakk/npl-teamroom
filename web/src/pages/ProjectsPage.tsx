@@ -168,92 +168,128 @@ export default function ProjectsPage() {
                         No projects yet.
                     </p>
                 ) : (
-                    <div className="overflow-x-auto">
-                        <table className="min-w-full text-left text-sm" style={{ borderCollapse: 'collapse' }}>
-                            <thead style={{ background: 'var(--paper)' }}>
-                                <tr>
-                                    <th className="px-4 py-3 font-mono text-[10px] uppercase tracking-wide" style={{ color: 'var(--text-secondary)' }}>Project</th>
-                                    <th className="px-4 py-3 font-mono text-[10px] uppercase tracking-wide" style={{ color: 'var(--text-secondary)' }}>Client</th>
-                                    <th className="px-4 py-3 font-mono text-[10px] uppercase tracking-wide" style={{ color: 'var(--text-secondary)' }}>Status</th>
-                                    <th className="px-4 py-3 font-mono text-[10px] uppercase tracking-wide" style={{ color: 'var(--text-secondary)' }}>Progress</th>
-                                    <th className="px-4 py-3 font-mono text-[10px] uppercase tracking-wide" style={{ color: 'var(--text-secondary)' }}>Deadline</th>
-                                    <th className="px-4 py-3" />
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {projects.map((project) => {
-                                    const isExpanded = expandedIds.has(project.id);
-                                    return (
-                                        <Fragment key={project.id}>
-                                            <tr
-                                                onClick={() => toggleExpand(project.id)}
-                                                className="cursor-pointer transition-colors hover:bg-[var(--paper)]"
-                                                style={{ borderTop: '1px solid var(--line-soft)' }}
-                                            >
-                                                <td className="px-4 py-3 align-top">
-                                                    <div className="flex items-start gap-2">
-                                                        {isExpanded ? (
-                                                            <ChevronDown size={14} strokeWidth={1.75} className="mt-1 shrink-0" style={{ color: 'var(--text-muted)' }} />
-                                                        ) : (
-                                                            <ChevronRight size={14} strokeWidth={1.75} className="mt-1 shrink-0" style={{ color: 'var(--text-muted)' }} />
-                                                        )}
-                                                        <div>
-                                                            <div className="text-sm font-medium" style={{ color: 'var(--ink)' }}>{project.name}</div>
-                                                            <div className="mt-1 text-xs" style={{ color: 'var(--text-secondary)' }}>{project.description}</div>
-                                                        </div>
-                                                    </div>
-                                                </td>
-                                                <td className="px-4 py-3 align-top text-sm" style={{ color: 'var(--text-secondary)' }}>{nameForClient(project.client_id)}</td>
-                                                <td className="px-4 py-3 align-top">
-                                                    <StatusTag status={project.status === 'ACTIVE' ? 'present' : project.status === 'COMPLETED' ? 'pending' : 'neutral'} label={project.status} />
-                                                </td>
-                                                <td className="px-4 py-3 align-top font-mono text-xs" style={{ color: 'var(--ink)' }}>
-                                                    <div>{projectProgress(project.id)}%</div>
-                                                    <div className="mt-1" style={{ color: hoursVariance(project.id).variance > 0 ? 'var(--status-absent)' : 'var(--status-present)' }}>
-                                                        {hoursVariance(project.id).variance >= 0 ? '+' : ''}{hoursVariance(project.id).variance}h
-                                                    </div>
-                                                </td>
-                                                <td className="px-4 py-3 align-top font-mono text-xs" style={{ color: 'var(--text-secondary)' }}>
-                                                    {project.deadline}
-                                                </td>
-                                                <td className="px-4 py-3 align-top text-right">
-                                                    {canManage && (
-                                                        <button
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                openEdit(project);
-                                                            }}
-                                                            aria-label="Edit project"
-                                                            className="inline-flex items-center justify-center p-1 transition-colors hover:opacity-70"
-                                                        >
-                                                            <Pencil size={16} strokeWidth={1.75} style={{ color: 'var(--text-muted)' }} />
-                                                        </button>
-                                                    )}
-                                                </td>
-                                            </tr>
-                                            {isExpanded && (
-                                                <tr style={{ borderTop: '1px solid var(--line-soft)', background: 'var(--paper)' }}>
-                                                    <td colSpan={6} className="px-4 py-4">
-                                                        <p className="font-mono text-[10px] uppercase tracking-wide" style={{ color: 'var(--text-secondary)' }}>
-                                                            Team
-                                                        </p>
-                                                        {project.team_member_ids.length === 0 ? (
-                                                            <p className="mt-2 text-sm" style={{ color: 'var(--text-muted)' }}>
-                                                                No team members assigned.
-                                                            </p>
-                                                        ) : (
-                                                            <p className="mt-2 text-sm" style={{ color: 'var(--ink)' }}>
-                                                                {project.team_member_ids.map((id) => employeeById(id)?.name ?? 'Unknown').join(', ')}
-                                                            </p>
-                                                        )}
-                                                    </td>
-                                                </tr>
+                    <div className="p-4 space-y-3">
+                        {/* Column header row, mimics the old table head */}
+                        <div
+                            className="hidden md:grid px-3 pb-2 font-mono text-[10px] uppercase tracking-wide"
+                            style={{
+                                gridTemplateColumns: '2.2fr 1.1fr 1fr 0.9fr 1fr 40px',
+                                color: 'var(--text-secondary)',
+                            }}
+                        >
+                            <span>Project</span>
+                            <span>Client</span>
+                            <span>Status</span>
+                            <span>Progress</span>
+                            <span>Deadline</span>
+                            <span />
+                        </div>
+
+                        {projects.map((project) => {
+                            const isExpanded = expandedIds.has(project.id);
+                            return (
+                                <div
+                                    key={project.id}
+                                    className="border"
+                                    style={{ borderColor: 'var(--line-soft)', borderRadius: 'var(--radius-md)' }}
+                                >
+                                    {/* Main row */}
+                                    <div
+                                        onClick={() => toggleExpand(project.id)}
+                                        className="grid cursor-pointer items-start gap-2 px-3 py-3.5 transition-colors hover:bg-[var(--paper)] md:grid-cols-[2.2fr_1.1fr_1fr_0.9fr_1fr_40px]"
+                                        style={{ borderRadius: 'var(--radius-md)' }}
+                                    >
+                                        <div className="flex items-start gap-2">
+                                            {isExpanded ? (
+                                                <ChevronDown size={14} strokeWidth={1.75} className="mt-1 shrink-0" style={{ color: 'var(--text-muted)' }} />
+                                            ) : (
+                                                <ChevronRight size={14} strokeWidth={1.75} className="mt-1 shrink-0" style={{ color: 'var(--text-muted)' }} />
                                             )}
-                                        </Fragment>
-                                    );
-                                })}
-                            </tbody>
-                        </table>
+                                            <div>
+                                                <div className="text-sm font-medium" style={{ color: 'var(--ink)' }}>{project.name}</div>
+                                                <div className="mt-1 text-xs" style={{ color: 'var(--text-secondary)' }}>{project.description}</div>
+                                            </div>
+                                        </div>
+
+                                        <div className="text-sm" style={{ color: 'var(--text-secondary)' }}>{nameForClient(project.client_id)}</div>
+
+                                        <div>
+                                            <StatusTag status={project.status === 'ACTIVE' ? 'present' : project.status === 'COMPLETED' ? 'pending' : 'neutral'} label={project.status} />
+                                        </div>
+
+                                        <div className="font-mono text-xs" style={{ color: 'var(--ink)' }}>
+                                            <div>{projectProgress(project.id)}%</div>
+                                            <div className="mt-1" style={{ color: hoursVariance(project.id).variance > 0 ? 'var(--status-absent)' : 'var(--status-present)' }}>
+                                                {hoursVariance(project.id).variance >= 0 ? '+' : ''}{hoursVariance(project.id).variance}h
+                                            </div>
+                                        </div>
+
+                                        <div className="font-mono text-xs" style={{ color: 'var(--text-secondary)' }}>
+                                            {project.deadline}
+                                        </div>
+
+                                        <div className="text-right">
+                                            {canManage && (
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        openEdit(project);
+                                                    }}
+                                                    aria-label="Edit project"
+                                                    className="inline-flex items-center justify-center p-1 transition-colors hover:opacity-70"
+                                                >
+                                                    <Pencil size={16} strokeWidth={1.75} style={{ color: 'var(--text-muted)' }} />
+                                                </button>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* Team section — inside the SAME bordered container as the row above */}
+                                    {isExpanded && (
+                                        <div
+                                            className="border-t px-3 py-3.5 pl-9"
+                                            style={{ borderColor: 'var(--line-soft)' }}
+                                        >
+                                            <p
+                                                className="font-display text-sm font-semibold"
+                                                style={{ color: 'var(--ink)' }}
+                                            >
+                                                Team
+                                            </p>
+
+                                            {project.team_member_ids.length === 0 ? (
+                                                <p
+                                                    className="mt-2 text-sm"
+                                                    style={{ color: 'var(--text-muted)' }}
+                                                >
+                                                    No team members assigned.
+                                                </p>
+                                            ) : (
+                                                <div className="mt-2 flex flex-wrap gap-2">
+                                                    {project.team_member_ids.map((id) => {
+                                                        const employee = employeeById(id);
+
+                                                        return (
+                                                            <div
+                                                                key={id}
+                                                                className="rounded-md border px-3 py-1.5 text-sm"
+                                                                style={{
+                                                                    background: 'white',
+                                                                    borderColor: 'var(--line)',
+                                                                    color: 'var(--ink)',
+                                                                }}
+                                                            >
+                                                                {employee?.name ?? 'Unknown'}
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })}
                     </div>
                 )}
             </div>

@@ -7,6 +7,7 @@ import { ConfirmDialog } from '../components/ConfirmDialog';
 import { StatCard, StatusTag } from '../components/Ledger';
 import type { Role } from '../data/roles';
 import { useAuth } from '../contexts/AuthContext';
+import { sendEmail } from '../services/emailService';
 
 type Ctx = { role: Role };
 
@@ -172,10 +173,77 @@ export default function LeavePage() {
     const payload = { employee_id: targetEmployeeId, type, start_date: startDate, end_date: endDate, reason: reason.trim() };
     const error = editingRequestId
       ? await updateRequest(editingRequestId, payload)
-      : await requestLeave(targetEmployeeId, { type, start_date: startDate, end_date: endDate, reason: reason.trim() });
+      : await requestLeave(targetEmployeeId, {
+        type,
+        start_date: startDate,
+        end_date: endDate,
+        reason: reason.trim(),
+      });
+
     if (error) {
       setFormError(error);
       return;
+    }
+    // send email to hr and admin on leave request
+    if (!editingRequestId) {
+      try {
+        const employeeName = nameFor(targetEmployeeId);
+
+        const emailHtml = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px;">
+        <h2 style="color: #172033;">New Leave Request</h2>
+
+        <p>A new leave request has been submitted.</p>
+
+        <table style="border-collapse: collapse; width: 100%;">
+          <tr>
+            <td style="padding: 8px; font-weight: bold;">Employee</td>
+            <td style="padding: 8px;">${employeeName}</td>
+          </tr>
+
+          <tr>
+            <td style="padding: 8px; font-weight: bold;">Leave Type</td>
+            <td style="padding: 8px;">${type}</td>
+          </tr>
+
+          <tr>
+            <td style="padding: 8px; font-weight: bold;">Start Date</td>
+            <td style="padding: 8px;">${startDate}</td>
+          </tr>
+
+          <tr>
+            <td style="padding: 8px; font-weight: bold;">End Date</td>
+            <td style="padding: 8px;">${endDate}</td>
+          </tr>
+
+          <tr>
+            <td style="padding: 8px; font-weight: bold;">Reason</td>
+            <td style="padding: 8px;">${reason.trim()}</td>
+          </tr>
+        </table>
+
+        <p style="margin-top: 20px;">
+          Please review the request in the HR Portal.
+        </p>
+      </div>
+    `;
+
+        await Promise.all([
+          sendEmail({
+            to: 'hr@roster.io',
+            subject: `New Leave Request - ${employeeName}`,
+            html: emailHtml,
+          }),
+
+          sendEmail({
+            to: 'admin@roster.io',
+            subject: `New Leave Request - ${employeeName}`,
+            html: emailHtml,
+          }),
+        ]);
+      } catch (emailError) {
+        console.error('Leave request email failed:', emailError);
+      }
     }
     setType('Casual');
     setStartDate('');
@@ -256,9 +324,9 @@ export default function LeavePage() {
 
       {employee && (
         <div className="mt-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
-          <StatCard label="Annual balance" value={`${balance} days`} status="present" />
+          {/* <StatCard label="Annual balance" value={`${balance} days`} status="present" />
           <StatCard label="Used this year" value={`${usedDays} days`} status="structure" />
-          <StatCard label="My pending" value={mine.filter((r) => r.status === 'PENDING').length} status="pending" />
+          <StatCard label="My pending" value={mine.filter((r) => r.status === 'PENDING').length} status="pending" /> */}
           {canApproveTeam && (
             <StatCard label="Team pending" value={teamRequests.filter((r) => r.status === 'PENDING').length} status="pending" />
           )}
