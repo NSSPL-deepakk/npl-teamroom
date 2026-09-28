@@ -158,7 +158,7 @@ function HRDashboard({ holidays, holidaysLoading, holidaysError }: { holidays: H
         <UpcomingHolidays holidays={holidays} canManage />
       </div>
 
-      <div className="mt-6 grid gap-6 lg:grid-cols-2">
+      {/* <div className="mt-6 grid gap-6 lg:grid-cols-2">
         <LedgerPanel title="Onboarding in progress">
           {recruitment.onboarding.length === 0 ? <p className="px-5 py-6 text-sm" style={{ color: 'var(--text-muted)' }}>No onboarding records found.</p> : recruitment.onboarding.map((item) => <LedgerRow key={item.id} primary={item.candidate_name ?? 'Candidate unavailable'} secondary={`${item.department ?? 'Department unavailable'}${item.current_step ? ` — ${item.current_step}` : ''}`} status={item.status?.toLowerCase() === 'completed' ? 'present' : 'pending'} />)}
         </LedgerPanel>
@@ -166,7 +166,8 @@ function HRDashboard({ holidays, holidaysLoading, holidaysError }: { holidays: H
           {pendingLeaves.length === 0 ? <p className="px-5 py-6 text-sm" style={{ color: 'var(--text-muted)' }}>No leave requests found.</p> : pendingLeaves.slice(0, 5).map((request) => <LedgerRow key={request.id} primary={employees.find((employee) => employee.id === request.employee_id)?.name ?? 'Employee unavailable'} secondary={`${request.type} · ${leaveDayCount(request)} ${leaveDayCount(request) === 1 ? 'day' : 'days'}`} meta="Pending" status="pending" onClick={() => navigate('/leave')} />)}
         </LedgerPanel>
       </div>
-    </>
+     */}
+     </>
   );
 }
 
@@ -240,15 +241,15 @@ function ManagerDashboard({ holidays }: { holidays: Holiday[] }) {
             <LedgerRow key={row.employee.id} primary={row.employee.name} secondary={row.leave ? `${row.leave.type} leave` : row.firstRecord ? `${row.department} · ${row.firstRecord.work_mode}` : `${row.department} · No check-in`} meta={row.firstRecord?.check_in ?? undefined} status={row.status} />
           ))}
         </LedgerPanel>
-        <LedgerPanel title="Leave approvals">
+        {/* <LedgerPanel title="Leave approvals">
           {requests.filter((request) => request.status === 'PENDING' && teamMemberIds.has(request.employee_id)).length === 0 ? <p className="px-5 py-6 text-sm" style={{ color: 'var(--text-muted)' }}>No pending leave approvals.</p> : requests.filter((request) => request.status === 'PENDING' && teamMemberIds.has(request.employee_id)).map((request) => {
             const employee = teamMembers.find((item) => item.id === request.employee_id);
             return <LedgerRow key={request.id} primary={employee?.name ?? 'Employee unavailable'} secondary={`${request.type} · ${leaveDayCount(request)} ${leaveDayCount(request) === 1 ? 'day' : 'days'}`} meta="Awaiting" status="pending" />;
           })}
-        </LedgerPanel>
+        </LedgerPanel> */}
       </div>
 
-      <div className="mt-6">
+      {/* <div className="mt-6">
         <QuickLinks
           links={[
             { label: 'Approve leave', path: '/leave' },
@@ -256,7 +257,7 @@ function ManagerDashboard({ holidays }: { holidays: Holiday[] }) {
             { label: 'Org chart', path: '/org-chart' },
           ]}
         />
-      </div>
+      </div> */}
     </>
   );
 }

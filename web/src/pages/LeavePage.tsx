@@ -327,12 +327,12 @@ export default function LeavePage() {
           {/* <StatCard label="Annual balance" value={`${balance} days`} status="present" />
           <StatCard label="Used this year" value={`${usedDays} days`} status="structure" />
           <StatCard label="My pending" value={mine.filter((r) => r.status === 'PENDING').length} status="pending" /> */}
-          {canApproveTeam && (
+          {/* {canApproveTeam && (
             <StatCard label="Team pending" value={teamRequests.filter((r) => r.status === 'PENDING').length} status="pending" />
-          )}
-          {canApproveOrg && (
-            <StatCard label="Org pending" value={orgRequests.filter((r) => r.status === 'PENDING').length} status="pending" />
-          )}
+          )} */}
+          {/* {canApproveOrg && (
+            // <StatCard label="Org pending" value={orgRequests.filter((r) => r.status === 'PENDING').length} status="pending" />
+          )} */}
         </div>
       )}
 
