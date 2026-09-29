@@ -55,8 +55,9 @@ export default function OrgChartPage() {
   const { role } = useOutletContext<Ctx>();
   const { employees, designations } = useAppData();
 
+  const activeEmployees = employees.filter((employee) => employee.employment_status === 'ACTIVE');
   const designationName = (id: string) => designations.find((d) => d.id === id)?.name ?? '—';
-  const roots = employees.filter((e) => !e.manager_id || !employees.some((m) => m.id === e.manager_id));
+  const roots = activeEmployees.filter((employee) => !employee.manager_id || !activeEmployees.some((manager) => manager.id === employee.manager_id));
 
   return (
     <div>
@@ -67,7 +68,7 @@ export default function OrgChartPage() {
         Reporting hierarchy
       </h1>
       <p className="mt-1 text-sm" style={{ color: 'var(--text-secondary)' }}>
-        {role === 'MANAGER' ? 'Your position and reports within the wider org.' : `${employees.length} people across the organization.`}
+        {role === 'MANAGER' ? 'Your position and reports within the wider org.' : `${activeEmployees.length} people across the organization.`}
       </p>
 
       <div className="mt-6 border bg-white p-5" style={{ borderColor: 'var(--line-soft)', borderRadius: 'var(--radius-md)' }}>
@@ -77,7 +78,7 @@ export default function OrgChartPage() {
           </p>
         ) : (
           roots.map((r) => (
-            <OrgNode key={r.id} employee={r} allEmployees={employees} designationName={designationName} depth={0} />
+            <OrgNode key={r.id} employee={r} allEmployees={activeEmployees} designationName={designationName} depth={0} />
           ))
         )}
       </div>

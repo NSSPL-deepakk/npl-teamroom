@@ -32,12 +32,16 @@ export default function NewTaskPage() {
 
     const canAssign = role === 'MANAGER' || role === 'HR' || role === 'SUPER_ADMIN';
     const actor = employee ?? employees[0] ?? null;
+    const activeEmployees = useMemo(
+        () => employees.filter((item) => item.employment_status === 'ACTIVE'),
+        [employees],
+    );
 
     const assignableEmployees = useMemo(() => {
-        if (role === 'HR' || role === 'SUPER_ADMIN') return employees;
-        if (role === 'MANAGER' && actor) return employees.filter((e) => e.manager_id === actor.id);
+        if (role === 'HR' || role === 'SUPER_ADMIN') return activeEmployees;
+        if (role === 'MANAGER' && actor) return activeEmployees.filter((e) => e.manager_id === actor.id);
         return [];
-    }, [role, actor, employees]);
+    }, [role, actor, activeEmployees]);
 
     const availableProjects = useMemo(
         () => projects.filter((project) => !selectedClientId || project.client_id === selectedClientId),

@@ -834,7 +834,7 @@ export default function AttendancePage() {
           </div>
 
           {/* Main Attendance Grid */}
-          <div className="mt-6 grid gap-5 xl:grid-cols-[1.6fr_0.95fr]">
+          <div className="mt-6 grid gap-5 xl:grid-cols-[minmax(0,1fr)_280px]">
             <div className="space-y-5">
               <div
                 className="border p-5"

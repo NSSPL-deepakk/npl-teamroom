@@ -48,7 +48,27 @@ export function StatCard({
     'Hired candidates': '/candidates?filter=HIRED',
     'Positions closed': '/recruitment?openingStatus=CLOSED',
   }[label];
-  const handleClick = onClick ?? (recruitmentRoute ? () => navigate(recruitmentRoute) : undefined);
+  const defaultRoute = recruitmentRoute ?? ({
+    Users: '/users',
+    Employees: '/employees',
+    'Total employees': '/employees',
+    Departments: '/departments',
+    'Active users (24h)': '/users',
+    'Holidays this year': '/holidays',
+    'New joiners (mtd)': '/employees',
+    'Team members': '/employees',
+    Present: '/attendance',
+    Absent: '/attendance',
+    'On leave': '/leave',
+    'Open tasks': '/tasks',
+    Today: '/attendance',
+    'Work mode': '/attendance',
+    'Leave balance': '/leave',
+    Open: '/tasks?status=OPEN',
+    Overdue: '/tasks?status=OVERDUE',
+    Completed: '/tasks?status=COMPLETED',
+  }[label]);
+  const handleClick = onClick ?? (defaultRoute ? () => navigate(defaultRoute) : undefined);
   return (
     <div
       role={handleClick ? 'button' : undefined}

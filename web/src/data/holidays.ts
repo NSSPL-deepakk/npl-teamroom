@@ -16,6 +16,10 @@ export interface Holiday {
   image?: string | null;
 }
 
+export type DashboardEvent = Omit<Holiday, 'category'> & {
+  category: HolidayCategory | 'Birthday' | 'Work Anniversary';
+};
+
 export type DayClassification = 'WORKING_DAY' | 'WEEKLY_OFF' | 'HOLIDAY';
 
 export function isWeeklyOff(date: string): boolean {
@@ -90,6 +94,53 @@ export function getComputedEmployeeEvents(employee: Employee, today = new Date()
       kind: 'Anniversary',
     });
   }
+
+  return events;
+}
+
+export function getUpcomingEmployeeEvents(employee: Employee, from = new Date(), lookaheadDays = 365): ComputedEmployeeEvent[] {
+  const start = new Date(from.getFullYear(), from.getMonth(), from.getDate());
+  const end = new Date(start);
+  end.setDate(end.getDate() + lookaheadDays);
+  const events: ComputedEmployeeEvent[] = [];
+
+  const addAnnualEvent = (month: number, day: number, kind: ComputedEventKind, description: string) => {
+    for (let year = start.getFullYear(); year <= end.getFullYear(); year += 1) {
+      const eventDate = new Date(year, month - 1, day);
+      if (eventDate < start || eventDate > end) continue;
+      const date = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+      const years = year - dateParts(employee.joining_date).year;
+      if (kind === 'Anniversary' && years <= 0) continue;
+      events.push({
+        id: `${kind.toLowerCase()}-${employee.id}-${date}`,
+        date,
+        name: kind === 'Birthday' ? `${employee.name}'s birthday` : `${employee.name}'s ${years}-year work anniversary`,
+        category: kind,
+        description,
+        image: null,
+        employeeId: employee.id,
+        kind,
+      });
+    }
+  };
+
+  if (employee.date_of_birth) {
+    const birthday = dateParts(employee.date_of_birth);
+    addAnnualEvent(
+      birthday.month,
+      birthday.day,
+      'Birthday',
+      employee.birthday_message?.trim() || `🎂 Happy Birthday, ${employee.name}! Wishing you a wonderful year ahead.`,
+    );
+  }
+
+  const joining = dateParts(employee.joining_date);
+  addAnnualEvent(
+    joining.month,
+    joining.day,
+    'Anniversary',
+    employee.anniversary_message?.trim() || `🎉 Happy work anniversary, ${employee.name}! Thank you for your dedication.`,
+  );
 
   return events;
 }
@@ -231,6 +282,65 @@ export function useHolidays() {
   }, []);
 
   return { holidays: [...holidays].sort((a, b) => a.date.localeCompare(b.date)), addHoliday, updateHoliday, removeHoliday, loading, error, refresh };
+}
+
+export function useDashboardHolidays(employees: Employee[], limit = 5, enabled = true) {
+  const [holidays, setHolidays] = useState<DashboardEvent[]>([]);
+  const [holidayCount, setHolidayCount] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const refresh = useCallback(async () => {
+    setLoading(true);
+    const today = getTodayIso();
+    const yearEnd = `${new Date().getFullYear()}-12-31`;
+    const columns = 'id, date, event_time, name, category, description, image';
+    const [eventsResult, countResult] = await Promise.all([
+      supabase.from('holidays').select(columns).gte('date', today).order('date', { ascending: true }).order('event_time', { ascending: true }).limit(limit),
+      supabase.from('holidays').select('id', { count: 'exact', head: true }).gte('date', today).lte('date', yearEnd).in('category', REAL_HOLIDAY_CATEGORIES),
+    ]);
+
+    const queryError = eventsResult.error ?? countResult.error;
+    if (queryError) {
+      setError(queryError.message);
+      setLoading(false);
+      return;
+    }
+
+    const employeeEvents: DashboardEvent[] = employees
+      .filter((employee) => employee.employment_status === 'ACTIVE')
+      .flatMap((employee) => getUpcomingEmployeeEvents(employee, new Date(), 365))
+      .map((event) => ({
+        id: event.id,
+        date: event.date,
+        name: event.name,
+        category: event.kind === 'Anniversary' ? 'Work Anniversary' : 'Birthday',
+        description: event.description,
+        image: event.image,
+        event_time: null,
+      }));
+    const seen = new Set<string>();
+    const combined: DashboardEvent[] = [...((eventsResult.data ?? []) as Holiday[]), ...employeeEvents]
+      .filter((event) => {
+        if (seen.has(event.id)) return false;
+        seen.add(event.id);
+        return true;
+      })
+      .sort((a, b) => a.date.localeCompare(b.date) || (a.event_time ?? '').localeCompare(b.event_time ?? ''))
+      .slice(0, limit);
+
+    setHolidays(combined);
+    setHolidayCount(countResult.count ?? 0);
+    setError(null);
+    setLoading(false);
+  }, [employees, limit]);
+
+  useEffect(() => {
+    if (!enabled) return;
+    void refresh();
+  }, [enabled, refresh]);
+
+  return { holidays, holidayCount, loading, error };
 }
 
 export function upcomingHolidays(holidays: Holiday[], from = new Date(), limit = 4): Holiday[] {

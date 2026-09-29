@@ -12,6 +12,7 @@ type Ctx = { role: Role };
 
 const STATUSES: TaskStatus[] = ['TODO', 'IN_PROGRESS', 'COMPLETED'];
 const STATUS_LABEL: Record<TaskStatus, string> = { TODO: 'To do', IN_PROGRESS: 'In progress', COMPLETED: 'Completed' };
+type TaskFilter = TaskStatus | 'ALL' | 'OPEN' | 'OVERDUE';
 const PRIORITY_COLOR: Record<TaskPriority, string> = {
   LOW: 'var(--status-neutral)',
   MEDIUM: 'var(--status-pending)',
@@ -129,7 +130,7 @@ export default function TasksPage() {
   const { projects, loading: projectsLoading, error: projectsError } = useProjects();
   const { tasks, setStatus, logHours, loading: tasksLoading, error: tasksError } = useTasks();
 
-  const [statusFilter, setStatusFilter] = useState<TaskStatus | 'ALL'>('ALL');
+  const [statusFilter, setStatusFilter] = useState<TaskFilter>('ALL');
   const [clientFilter, setClientFilter] = useState('ALL');
   const [projectFilter, setProjectFilter] = useState('ALL');
   const showCreateTaskButton = role !== 'EMPLOYEE';
@@ -149,22 +150,33 @@ export default function TasksPage() {
     return [];
   }, [role, employee, employees, tasks]);
 
+  const today = new Date().toISOString().slice(0, 10);
+  const countableTasks = useMemo(
+    () => visibleTasks.filter((task) =>
+      (clientFilter === 'ALL' || task.client_id === clientFilter)
+      && (projectFilter === 'ALL' || task.project_id === projectFilter),
+    ),
+    [visibleTasks, clientFilter, projectFilter],
+  );
+
   const filteredTasks = useMemo(
     () => visibleTasks.filter((task) =>
-      (statusFilter === 'ALL' || task.status === statusFilter)
+      (statusFilter === 'ALL'
+        || (statusFilter === 'OPEN' && task.status !== 'COMPLETED')
+        || (statusFilter === 'OVERDUE' && task.status !== 'COMPLETED' && task.due_date < today)
+        || task.status === statusFilter)
       && (clientFilter === 'ALL' || task.client_id === clientFilter)
       && (projectFilter === 'ALL' || task.project_id === projectFilter),
     ),
-    [visibleTasks, statusFilter, clientFilter, projectFilter],
+    [visibleTasks, statusFilter, clientFilter, projectFilter, today],
   );
 
   const nameFor = (id: string) => employees.find((e) => e.id === id)?.name ?? 'Unknown';
   const clientNameFor = (id: string) => clients.find((client) => client.id === id)?.name ?? 'Unknown';
   const projectNameFor = (id: string) => projects.find((project) => project.id === id)?.name ?? 'Unknown';
-  const today = new Date().toISOString().slice(0, 10);
-  const openCount = filteredTasks.filter((t) => t.status !== 'COMPLETED').length;
-  const overdueCount = filteredTasks.filter((t) => t.status !== 'COMPLETED' && t.due_date < today).length;
-  const completedCount = filteredTasks.filter((t) => t.status === 'COMPLETED').length;
+  const openCount = countableTasks.filter((t) => t.status !== 'COMPLETED').length;
+  const overdueCount = countableTasks.filter((t) => t.status !== 'COMPLETED' && t.due_date < today).length;
+  const completedCount = countableTasks.filter((t) => t.status === 'COMPLETED').length;
 
   if (clientsLoading || projectsLoading || tasksLoading) {
     return <p className="py-12 text-center font-mono text-xs uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>Loading tasks...</p>;
@@ -199,17 +211,19 @@ export default function TasksPage() {
       </div>
 
       <div className="mt-6 grid grid-cols-3 gap-4">
-        <StatCard label="Open" value={openCount} status="pending" />
-        <StatCard label="Overdue" value={overdueCount} status="absent" />
-        <StatCard label="Completed" value={completedCount} status="present" />
+        <StatCard label="Open" value={openCount} status="pending" selected={statusFilter === 'OPEN'} onClick={() => setStatusFilter('OPEN')} />
+        <StatCard label="Overdue" value={overdueCount} status="absent" selected={statusFilter === 'OVERDUE'} onClick={() => setStatusFilter('OVERDUE')} />
+        <StatCard label="Completed" value={completedCount} status="present" selected={statusFilter === 'COMPLETED'} onClick={() => setStatusFilter('COMPLETED')} />
       </div>
 
 
 
       {role !== 'EMPLOYEE' && (
         <div className="mt-6 flex flex-wrap gap-3">
-          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as TaskStatus | 'ALL')} className="border px-3 py-2 text-sm outline-none" style={inputStyle} aria-label="Filter by status">
+          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as TaskFilter)} className="border px-3 py-2 text-sm outline-none" style={inputStyle} aria-label="Filter by status">
             <option value="ALL">All statuses</option>
+            <option value="OPEN">Open</option>
+            <option value="OVERDUE">Overdue</option>
             {STATUSES.map((status) => <option key={status} value={status}>{STATUS_LABEL[status]}</option>)}
           </select>
           <select value={clientFilter} onChange={(e) => { setClientFilter(e.target.value); setProjectFilter('ALL'); }} className="border px-3 py-2 text-sm outline-none" style={inputStyle} aria-label="Filter by client">

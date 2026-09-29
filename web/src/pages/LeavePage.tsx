@@ -4,7 +4,7 @@ import { useAppData } from '../contexts/AppDataContext';
 import { leaveDayCount, useLeaveRequests, type LeaveRequest, type LeaveType } from '../data/leave';
 import { Drawer } from '../components/Drawer';
 import { ConfirmDialog } from '../components/ConfirmDialog';
-import { StatCard, StatusTag } from '../components/Ledger';
+import { StatusTag } from '../components/Ledger';
 import type { Role } from '../data/roles';
 import { useAuth } from '../contexts/AuthContext';
 import { sendEmail } from '../services/emailService';
@@ -12,8 +12,6 @@ import { sendEmail } from '../services/emailService';
 type Ctx = { role: Role };
 
 const LEAVE_TYPES: LeaveType[] = ['Casual', 'Sick', 'Annual', 'Other'];
-const ANNUAL_BALANCE = 18;
-
 const inputStyle = { borderColor: 'var(--line)', borderRadius: 'var(--radius-sm)' } as const;
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
@@ -112,7 +110,11 @@ export default function LeavePage() {
   const { profile } = useAuth();
   const { employees } = useAppData();
   const { requests, requestLeave, updateRequest, approve, reject } = useLeaveRequests();
-  const employee = profile?.employee_id ? employees.find((item) => item.id === profile.employee_id) ?? null : null;
+  const employee = profile
+    ? employees.find(
+      (item) => item.id === profile.employee_id || item.email.toLowerCase() === profile.email.toLowerCase(),
+    ) ?? null
+    : null;
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editingRequestId, setEditingRequestId] = useState<string | null>(null);
@@ -138,11 +140,6 @@ export default function LeavePage() {
     () => (employee ? requests.filter((r) => r.employee_id === employee.id) : []),
     [requests, employee],
   );
-  const usedDays = mine
-    .filter((r) => r.status === 'APPROVED')
-    .reduce((sum, r) => sum + leaveDayCount(r), 0);
-  const balance = ANNUAL_BALANCE - usedDays;
-
   const canApproveTeam = role === 'MANAGER' && !!employee;
   const canApproveOrg = role === 'HR' || role === 'SUPER_ADMIN';
   const canSubmitForOthers = canApproveTeam || canApproveOrg;
@@ -165,6 +162,11 @@ export default function LeavePage() {
   const orgRequests = canApproveOrg ? requests : [];
 
   const nameFor = (id: string) => employees.find((e) => e.id === id)?.name ?? 'Unknown';
+
+  // Approve/reject is allowed on anyone's request except your own.
+  const myEmployeeId = employee?.id ?? profile?.employee_id ?? null;
+  const canDecide = (request: LeaveRequest) =>
+    !!request.employee_id && request.employee_id !== myEmployeeId;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -278,6 +280,8 @@ export default function LeavePage() {
   }
 
   function askForDecision(action: DecisionAction, id: string) {
+    const request = requests.find((r) => r.id === id);
+    if (!request || !canDecide(request)) return; // never decide on your own request
     setActionError('');
     setConfirmation({ action, id });
   }
@@ -334,6 +338,7 @@ export default function LeavePage() {
             // <StatCard label="Org pending" value={orgRequests.filter((r) => r.status === 'PENDING').length} status="pending" />
           )} */}
         </div>
+
       )}
 
       {employee && (
@@ -370,7 +375,7 @@ export default function LeavePage() {
                 key={r.id}
                 req={r}
                 employeeName={nameFor(r.employee_id)}
-                showApprove
+                showApprove={canDecide(r)}
                 onApprove={(id) => askForDecision('approve', id)}
                 onReject={(id) => askForDecision('reject', id)}
               />
@@ -396,7 +401,7 @@ export default function LeavePage() {
                 key={r.id}
                 req={r}
                 employeeName={nameFor(r.employee_id)}
-                showApprove
+                showApprove={canDecide(r)}
                 canDecideAnyStatus={canApproveOrg}
                 canEdit={canApproveOrg}
                 onApprove={(id) => askForDecision('approve', id)}

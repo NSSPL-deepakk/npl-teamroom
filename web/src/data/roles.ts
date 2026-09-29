@@ -88,7 +88,6 @@ export const ROLE_NAV: Record<Role, NavGroup[]> = {
       label: 'Recruitment',
       items: [
         { label: 'Recruitment', path: '/recruitment', icon: '◉' },
-        { label: 'Candidates', path: '/candidates', icon: '○' },
         { label: 'Onboarding', path: '/onboarding', icon: '', iconName: 'onboarding' },
       ],
     },

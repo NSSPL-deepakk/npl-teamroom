@@ -1,8 +1,6 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { useMemo } from 'react';
-import { formatHolidayDateTime, getTodayIso, resolveEventImage, stripMarkdown, type Holiday, type HolidayCategory } from '../data/holidays';
-import { useUpcomingEvents } from '../data/events';
-import type { Employee } from '../data/employees';
+import { formatHolidayDateTime, resolveEventImage, stripMarkdown, type DashboardEvent, type HolidayCategory } from '../data/holidays';
 
 type UpcomingItem = {
   id: string;
@@ -24,18 +22,15 @@ const TAG_STYLES: Record<string, { background: string; color: string }> = {
   'Work Anniversary': { background: '#F5F3FF', color: '#6D28D9' },
 };
 
-export function UpcomingHolidays({ holidays, canManage = false, employees = [] }: { holidays: Holiday[]; canManage?: boolean; employees?: Employee[] }) {
+export function UpcomingHolidays({ holidays, canManage = false, loading = false, error = null }: { holidays: DashboardEvent[]; canManage?: boolean; loading?: boolean; error?: string | null }) {
   const navigate = useNavigate();
-  const upcomingEvents = useUpcomingEvents(employees, 5);
 
   const items = useMemo<UpcomingItem[]>(() => {
-    const todayIso = getTodayIso();
     const seen = new Set<string>();
 
     const mixed: UpcomingItem[] = [];
 
     for (const h of holidays) {
-      if (h.date < todayIso) continue;
       if (seen.has(h.id)) continue;
       seen.add(h.id);
       mixed.push({
@@ -50,23 +45,8 @@ export function UpcomingHolidays({ holidays, canManage = false, employees = [] }
       });
     }
 
-    for (const e of upcomingEvents) {
-      if (e.date < todayIso) continue;
-      if (seen.has(e.id)) continue;
-      seen.add(e.id);
-      mixed.push({
-        id: e.id,
-        date: e.date,
-        name: e.title,
-        category: e.kind === 'announcement' ? 'Announcement' : e.kind === 'birthday' ? 'Birthday' : 'Work Anniversary',
-        description: e.description ?? null,
-        image: e.image ?? null,
-        readOnly: true,
-      });
-    }
-
-    return mixed.sort((a, b) => a.date.localeCompare(b.date)).slice(0, 5);
-  }, [holidays, upcomingEvents]);
+    return mixed.sort((a, b) => a.date.localeCompare(b.date) || (a.event_time ?? '').localeCompare(b.event_time ?? '')).slice(0, 5);
+  }, [holidays]);
 
   return (
     <div className="min-w-0 border bg-white" style={{ borderColor: 'var(--line-soft)', borderRadius: 'var(--radius-md)' }}>
@@ -86,7 +66,11 @@ export function UpcomingHolidays({ holidays, canManage = false, employees = [] }
         </Link>
       </div>
 
-      {items.length === 0 ? (
+      {loading ? (
+        <div className="px-5 py-6 text-sm" style={{ color: 'var(--text-muted)' }}>Loading upcoming events...</div>
+      ) : error ? (
+        <div className="px-5 py-6 text-sm" style={{ color: 'var(--status-absent)' }}>Could not load upcoming events.</div>
+      ) : items.length === 0 ? (
         <p className="px-5 py-6 text-sm" style={{ color: 'var(--text-muted)' }}>
           Nothing coming up on the calendar.
         </p>
