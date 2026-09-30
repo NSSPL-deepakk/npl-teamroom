@@ -22,8 +22,8 @@
   /* hairline dividers */
   --line-soft: #F3F4F6;
   /* lighter hairline, on paper */
-  --card-shadow: 0 2px 10px rgba(15, 23, 42, 0.12);
-  --card-shadow-hover: 0 5px 14px rgba(15, 23, 42, 0.16);
+  --card-shadow: 0 3px 12px rgba(15, 23, 42, 0.18);
+  --card-shadow-hover: 0 6px 16px rgba(15, 23, 42, 0.24);
 
   /* --- Text --- */
   --text-primary: #17212B;
@@ -78,6 +78,11 @@ body {
   color: var(--text-primary);
   font-family: var(--font-body);
   -webkit-font-smoothing: antialiased;
+}
+
+:is(div, section, article, form).border.bg-white:not(.shadow-xl):not(.shadow-lg):not(.shadow-sm) {
+  box-shadow: var(--card-shadow);
+  transition: box-shadow 160ms ease;
 }
 
 .summary-card {
