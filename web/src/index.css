@@ -20,7 +20,7 @@
   /* card / panel surface */
   --line: #E5E7EB;
   /* hairline dividers */
-  --line-soft: #F3F4F6;
+  --line-soft: #D6D9DF;
   /* lighter hairline, on paper */
   --card-shadow: 0 3px 12px rgba(15, 23, 42, 0.18);
   --card-shadow-hover: 0 6px 16px rgba(15, 23, 42, 0.24);
