@@ -3,6 +3,7 @@ import { useOutletContext } from 'react-router-dom';
 import { useAppData } from '../contexts/AppDataContext';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import type { Role } from '../data/roles';
+import { normalizeDesignationName } from '../data/designations';
 
 type Ctx = { role: Role };
 
@@ -11,19 +12,41 @@ const inputStyle = { borderColor: 'var(--line)', borderRadius: 'var(--radius-sm)
 export default function DesignationsPage() {
   const { role } = useOutletContext<Ctx>();
   const canManage = role === 'SUPER_ADMIN';
-  const { designations, addDesignation, removeDesignation, departments, employees } = useAppData();
+  const { designations, designationsError, addDesignation, updateDesignation, removeDesignation, departments, employees } = useAppData();
   const [name, setName] = useState('');
-  const [departmentId, setDepartmentId] = useState('');
+  const [departmentIds, setDepartmentIds] = useState<string[]>([]);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [removeId, setRemoveId] = useState<string | null>(null);
 
+  const matchingDesignation = designations.find((designation) => (
+    designation.id !== editingId && normalizeDesignationName(designation.name) === normalizeDesignationName(name)
+  ));
+  const missingDepartmentIds = matchingDesignation
+    ? departmentIds.filter((id) => !matchingDesignation.department_ids.includes(id))
+    : departmentIds;
   const countFor = (id: string) => employees.filter((e) => e.designation_id === id).length;
 
-  async function handleAdd(e: React.FormEvent) {
-    e.preventDefault();
-    if (!name.trim() || !departmentId) return;
-    await addDesignation(name.trim(), departmentId);
+  function resetForm() {
     setName('');
-    setDepartmentId('');
+    setDepartmentIds([]);
+    setEditingId(null);
+  }
+
+  function handleEdit(designationId: string) {
+    const designation = designations.find((item) => item.id === designationId);
+    if (!designation) return;
+    setEditingId(designation.id);
+    setName(designation.name);
+    setDepartmentIds(designation.department_ids);
+  }
+
+  async function handleSave(e: React.FormEvent) {
+    e.preventDefault();
+    if (!name.trim() || departmentIds.length === 0) return;
+    const savedId = editingId
+      ? await updateDesignation(editingId, name.trim(), departmentIds)
+      : await addDesignation(name.trim(), departmentIds);
+    if (savedId) resetForm();
   }
 
   return (
@@ -37,6 +60,11 @@ export default function DesignationsPage() {
       <p className="mt-1 text-sm" style={{ color: 'var(--text-secondary)' }}>
         {designations.length} designation{designations.length !== 1 ? 's' : ''}
       </p>
+      {designationsError && (
+        <p role="alert" className="mt-3 text-sm" style={{ color: 'var(--status-absent)' }}>
+          {designationsError}
+        </p>
+      )}
 
       <div className={`mt-6 grid gap-6 ${canManage ? 'lg:grid-cols-[1fr_320px]' : ''}`}>
         <div className="border bg-white" style={{ borderColor: 'var(--line-soft)', borderRadius: 'var(--radius-md)' }}>
@@ -56,7 +84,7 @@ export default function DesignationsPage() {
                   {d.name}
                 </p>
                 <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-                  {departments.find((department) => department.id === d.department_id)?.name ?? '—'}
+                  {d.department_ids.map((id) => departments.find((department) => department.id === id)?.name ?? '—').join(', ')}
                 </span>
                 <span
                   className="font-mono px-2 py-0.5 text-[11px] uppercase"
@@ -65,13 +93,22 @@ export default function DesignationsPage() {
                   {countFor(d.id)} people
                 </span>
                 {canManage && (
-                  <button
-                    onClick={() => setRemoveId(d.id)}
-                    className="font-mono text-[11px] uppercase tracking-wide hover:underline"
-                    style={{ color: 'var(--status-absent)' }}
-                  >
-                    Remove
-                  </button>
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={() => handleEdit(d.id)}
+                      className="font-mono text-[11px] uppercase tracking-wide hover:underline"
+                      style={{ color: 'var(--accent-structure)' }}
+                    >
+                      Edit
+                    </button>
+                    <button
+                      onClick={() => setRemoveId(d.id)}
+                      className="font-mono text-[11px] uppercase tracking-wide hover:underline"
+                      style={{ color: 'var(--status-absent)' }}
+                    >
+                      Remove
+                    </button>
+                  </div>
                 )}
               </div>
             ))
@@ -81,9 +118,9 @@ export default function DesignationsPage() {
         {canManage && (
           <div className="h-fit border bg-white p-5" style={{ borderColor: 'var(--line-soft)', borderRadius: 'var(--radius-md)' }}>
             <h3 className="text-sm font-semibold" style={{ color: 'var(--ink)' }}>
-              Add a designation
+              {editingId ? 'Edit designation' : 'Add a designation'}
             </h3>
-            <form onSubmit={handleAdd} className="mt-4 space-y-4">
+            <form onSubmit={handleSave} className="mt-4 space-y-4">
               <label className="block">
                 <span className="text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-secondary)' }}>
                   Name
@@ -98,34 +135,52 @@ export default function DesignationsPage() {
                   style={inputStyle}
                 />
               </label>
-              <label className="block">
+              {matchingDesignation && (
+                <p className="-mt-2 text-xs" style={{ color: 'var(--accent-structure)' }}>
+                  {editingId
+                    ? 'Another designation already uses this title. Cancel and edit that record to change its departments.'
+                    : 'This title already exists. Selected departments will be added to the existing designation.'}
+                </p>
+              )}
+              <div>
                 <span className="text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-secondary)' }}>
-                  Department
+                  Departments
                 </span>
-                <select
-                  required
-                  value={departmentId}
-                  onChange={(e) => setDepartmentId(e.target.value)}
-                  className="mt-1.5 w-full border px-3 py-2 text-sm outline-none"
-                  style={inputStyle}
-                >
-                  <option value="" disabled>
-                    Select…
-                  </option>
+                <div className="mt-1.5 max-h-36 space-y-1 overflow-y-auto border p-2" style={inputStyle}>
                   {departments.map((department) => (
-                    <option key={department.id} value={department.id}>
-                      {department.name}
-                    </option>
+                    <label key={department.id} className="flex items-center gap-2 py-1 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={departmentIds.includes(department.id)}
+                        onChange={(e) => setDepartmentIds((selected) => (
+                          e.target.checked
+                            ? [...selected, department.id]
+                            : selected.filter((id) => id !== department.id)
+                        ))}
+                      />
+                      <span>{department.name}</span>
+                    </label>
                   ))}
-                </select>
-              </label>
+                </div>
+                {departmentIds.length === 0 && (
+                  <p className="mt-1 text-xs" style={{ color: 'var(--text-muted)' }}>
+                    Select at least one department.
+                  </p>
+                )}
+              </div>
               <button
                 type="submit"
+                disabled={departmentIds.length === 0 || Boolean(editingId && matchingDesignation) || Boolean(!editingId && matchingDesignation && missingDepartmentIds.length === 0)}
                 className="w-full py-2.5 text-sm font-medium transition-opacity hover:opacity-90"
-                style={{ background: 'var(--accent-structure)', color: 'white', borderRadius: 'var(--radius-sm)' }}
+                style={{ background: 'var(--accent-structure)', color: 'white', borderRadius: 'var(--radius-sm)', opacity: departmentIds.length === 0 || Boolean(editingId && matchingDesignation) || Boolean(!editingId && matchingDesignation && missingDepartmentIds.length === 0) ? 0.55 : 1 }}
               >
-                Add designation
+                {editingId ? 'Save changes' : matchingDesignation ? missingDepartmentIds.length > 0 ? 'Add departments to existing title' : 'Already linked to selected departments' : 'Add designation'}
               </button>
+              {editingId && (
+                <button type="button" onClick={resetForm} className="w-full py-2 text-sm" style={{ color: 'var(--text-secondary)' }}>
+                  Cancel edit
+                </button>
+              )}
             </form>
           </div>
         )}

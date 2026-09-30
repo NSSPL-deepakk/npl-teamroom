@@ -389,7 +389,7 @@ export default function EmployeeAttendanceDetailPage() {
                     ['Absent Days', monthSummary.absentDays, 'var(--status-absent)'],
                     ['Holidays', monthSummary.holidays, '#7C3AED'],
                     ['Total Hours Logged', `${monthSummary.totalHours.toFixed(1)}h`, 'var(--accent-structure)'],
-                ].map(([label, value, color]) => <div key={label} className="border bg-white p-4" style={{ borderColor: 'var(--line-soft)', borderRadius: 'var(--radius-sm)' }}><p className="font-mono text-[10px] uppercase tracking-wide" style={{ color: 'var(--text-secondary)' }}>{label}</p><p className="mt-2 text-2xl font-semibold tabular-nums" style={{ color: color as string }}>{value}</p></div>)}
+                ].map(([label, value, color]) => <div key={label} className="summary-card border bg-white p-4" style={{ borderColor: 'var(--line)', borderRadius: 'var(--radius-sm)' }}><p className="font-mono text-[10px] uppercase tracking-wide" style={{ color: 'var(--text-secondary)' }}>{label}</p><p className="mt-2 text-2xl font-semibold tabular-nums" style={{ color: color as string }}>{value}</p></div>)}
             </div>
 
             <div className="overflow-hidden border bg-white shadow-sm" style={{ borderColor: 'var(--line-soft)', borderRadius: 'var(--radius-md)' }}>

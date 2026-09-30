@@ -22,6 +22,8 @@
   /* hairline dividers */
   --line-soft: #F3F4F6;
   /* lighter hairline, on paper */
+  --card-shadow: 0 2px 10px rgba(15, 23, 42, 0.12);
+  --card-shadow-hover: 0 5px 14px rgba(15, 23, 42, 0.16);
 
   /* --- Text --- */
   --text-primary: #17212B;
@@ -76,6 +78,31 @@ body {
   color: var(--text-primary);
   font-family: var(--font-body);
   -webkit-font-smoothing: antialiased;
+}
+
+.summary-card {
+  box-shadow: var(--card-shadow);
+  transition: box-shadow 160ms ease;
+}
+
+.summary-card:is(button:not(:disabled), a[href], [role="button"]:not([aria-disabled="true"])):hover {
+  box-shadow: var(--card-shadow-hover);
+}
+
+:is(button:not(:disabled), a[href], [role="button"]:not([aria-disabled="true"])) {
+  transition: filter 140ms ease, box-shadow 140ms ease, background-color 140ms ease, border-color 140ms ease, color 140ms ease, opacity 140ms ease;
+}
+
+:is(button:not(:disabled), a[href], [role="button"]:not([aria-disabled="true"])):hover {
+  filter: brightness(0.97);
+}
+
+:is(input, select, textarea):not(:disabled) {
+  transition: box-shadow 140ms ease;
+}
+
+:is(input, select, textarea):not(:disabled):hover {
+  box-shadow: 0 0 0 2px rgba(99, 91, 255, 0.12);
 }
 
 h1,

@@ -12,7 +12,7 @@ type EventDetailData = {
     category: HolidayCategory | 'Announcement' | 'Birthday' | 'Anniversary';
     description?: string | null;
     image?: string | null;
-    kind?: 'Holiday' | 'Announcement' | 'Birthday' | 'Anniversary';
+    kind?: 'Holiday' | 'In-office celebration' | 'Announcement' | 'Birthday' | 'Anniversary';
 };
 
 function eventStyle(category: EventDetailData['category']) {
@@ -21,6 +21,8 @@ function eventStyle(category: EventDetailData['category']) {
         case 'Optional Holiday':
         case 'Company Holiday':
             return { background: 'var(--accent-holiday-bg)', color: 'var(--accent-holiday)' };
+        case 'In-office celebration':
+            return { background: '#ECFDF5', color: '#047857' };
         case 'Announcement':
             return { background: '#E0F2FE', color: '#0F766E' };
         case 'Birthday':
@@ -52,7 +54,7 @@ export default function EventDetailPage() {
                 category: manual.category,
                 description: manual.description ?? null,
                 image: manual.image ?? null,
-                kind: manual.category === 'Announcement' ? 'Announcement' : 'Holiday',
+                kind: manual.category === 'Announcement' ? 'Announcement' : manual.category === 'In-office celebration' ? 'In-office celebration' : 'Holiday',
             };
         }
 

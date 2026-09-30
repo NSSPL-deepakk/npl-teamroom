@@ -439,7 +439,10 @@ export default function AttendancePage() {
         </div>
 
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
-          {metricCards.map(([label, value, color, metric]) => <button key={label} type="button" onClick={() => { void handleMetricSelect(metric); }} aria-pressed={selectedMetric === metric || (metric === 'all' && selectedMetric === null)} className="relative cursor-pointer overflow-hidden border bg-white p-4 text-left transition-shadow hover:shadow-sm" style={{ borderColor: selectedMetric === metric || (metric === 'all' && selectedMetric === null) ? color : 'var(--line-soft)', borderRadius: 'var(--radius-sm)', boxShadow: selectedMetric === metric || (metric === 'all' && selectedMetric === null) ? `inset 0 -2px 0 ${color}` : undefined }}><span className="absolute inset-y-0 left-0 w-1" style={{ background: color }} /><p className="pl-2 font-mono text-[10px] uppercase tracking-wide" style={{ color: 'var(--text-secondary)' }}>{label}</p><p className="mt-2 pl-2 text-2xl font-semibold tabular" style={{ color }}>{value}</p></button>)}
+          {metricCards.map(([label, value, color, metric]) => {
+            const isSelected = selectedMetric === metric || (metric === 'all' && selectedMetric === null);
+            return <button key={label} type="button" onClick={() => { void handleMetricSelect(metric); }} aria-pressed={isSelected} className="summary-card relative cursor-pointer overflow-hidden border bg-white p-4 text-left" style={{ borderColor: isSelected ? color : 'var(--line)', borderRadius: 'var(--radius-sm)', boxShadow: isSelected ? `inset 0 -2px 0 ${color}, var(--card-shadow)` : undefined }}><span className="absolute inset-y-0 left-0 w-1" style={{ background: color }} /><p className="pl-2 font-mono text-[10px] uppercase tracking-wide" style={{ color: 'var(--text-secondary)' }}>{label}</p><p className="mt-2 pl-2 text-2xl font-semibold tabular" style={{ color }}>{value}</p></button>;
+          })}
         </div>
         {selectedMetric && <div className="flex items-center justify-between gap-3 border bg-white px-4 py-3 text-sm" style={{ borderColor: 'var(--line-soft)', borderRadius: 'var(--radius-sm)' }}><span style={{ color: 'var(--text-secondary)' }}>Showing {metricCards.find(([, , , metric]) => metric === selectedMetric)?.[0] ?? 'matching'} employees for {selectedDate}.</span><button type="button" onClick={() => { void handleMetricSelect('all'); }} className="border px-3 py-1.5 text-xs font-medium transition-colors hover:bg-[var(--paper)]" style={{ borderColor: 'var(--line)', borderRadius: 'var(--radius-sm)', color: 'var(--ink)' }}>Clear filter</button></div>}
 
@@ -505,10 +508,10 @@ export default function AttendancePage() {
 
           {superAdminSection === 'overview' ? (
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[1200px] text-left">
+              <table className="w-full min-w-[1100px] text-left">
                 <thead>
                   <tr style={{ background: 'var(--paper)' }}>
-                    {['Employee', 'Department', 'Check-in', 'Check-out', 'Hours Worked', 'Status', 'Work Mode', 'Manual Entry Reason'].map((heading) => (
+                    {['Employee', 'Department', 'Check-in', 'Check-out', 'Hours Worked', 'Work Mode', 'Manual Entry Reason'].map((heading) => (
                       <th
                         key={heading}
                         className="px-5 py-3 text-xs uppercase tracking-wide"
@@ -521,21 +524,6 @@ export default function AttendancePage() {
                 </thead>
                 <tbody>
                   {overviewRows.map((row) => {
-                    // Status color mapping
-                    const statusColor =
-                      row.status === 'On leave' ? '#F59E0B' :
-                        row.status === 'Present' ? '#22C55E' :
-                          row.status === 'Late' ? '#B45309' :
-                            row.status === 'Holiday' ? 'var(--accent-holiday)' :
-                              '#EF4444'; // Absent
-
-                    const statusBgColor =
-                      row.status === 'On leave' ? '#FEF3C7' :
-                        row.status === 'Present' ? '#DCFCE7' :
-                          row.status === 'Late' ? '#FEF3C7' :
-                            row.status === 'Holiday' ? 'var(--paper)' :
-                              '#FEE2E2'; // Absent
-
                     return (
                       <tr
                         key={row.employee.id}
@@ -574,20 +562,6 @@ export default function AttendancePage() {
                           {formatMinutes(row.workedMinutes)}
                         </td>
 
-                        {/* Status Badge */}
-                        <td className="px-5 py-3">
-                          <span
-                            className="font-mono px-2 py-1 text-[10px] uppercase font-medium"
-                            style={{
-                              background: statusBgColor,
-                              color: statusColor,
-                              borderRadius: 'var(--radius-sm)'
-                            }}
-                          >
-                            {row.status}
-                          </span>
-                        </td>
-
                         {/* Work Mode */}
                         <td className="px-5 py-3 text-xs" style={{ color: 'var(--text-secondary)' }}>
                           {row.firstSession?.work_mode ?? '—'}
@@ -604,7 +578,7 @@ export default function AttendancePage() {
                       </tr>
                     );
                   })}
-                  {overviewRows.length === 0 && <tr><td colSpan={8} className="px-5 py-10 text-center text-sm" style={{ color: 'var(--text-muted)' }}>No employees match the selected filter.</td></tr>}
+                  {overviewRows.length === 0 && <tr><td colSpan={7} className="px-5 py-10 text-center text-sm" style={{ color: 'var(--text-muted)' }}>No employees match the selected filter.</td></tr>}
                 </tbody>
               </table>
             </div>
@@ -722,7 +696,7 @@ export default function AttendancePage() {
         <div className="mt-6 space-y-6">
           <div className="grid gap-4 md:grid-cols-4">
             {adminCards.map((card) => (
-              <div key={card.label} className="border bg-white p-4" style={{ borderColor: 'var(--line-soft)', borderRadius: 'var(--radius-sm)' }}>
+              <div key={card.label} className="summary-card border bg-white p-4" style={{ borderColor: 'var(--line)', borderRadius: 'var(--radius-sm)' }}>
                 <p className="font-mono text-[10px] uppercase tracking-wide" style={{ color: 'var(--text-secondary)' }}>{card.label}</p>
                 <p className="mt-2 text-2xl font-semibold" style={{ color: 'var(--ink)' }}>{card.value}</p>
               </div>
@@ -805,12 +779,12 @@ export default function AttendancePage() {
         <div className="space-y-6">
           {/* Monthly Summary Cards */}
           <div className="grid gap-4 md:grid-cols-4">
-            <div className="border bg-white p-4" style={{ borderColor: 'var(--line-soft)', borderRadius: 'var(--radius-sm)' }}>
+            <div className="summary-card border bg-white p-4" style={{ borderColor: 'var(--line)', borderRadius: 'var(--radius-sm)' }}>
               <p className="font-mono text-[10px] uppercase tracking-wide" style={{ color: 'var(--text-secondary)' }}>Current month (till today)</p>
               <p className="mt-2 text-2xl font-semibold" style={{ color: 'var(--ink)' }}>{currentMonthLogged.toFixed(1)}h</p>
               <p className="mt-1 text-xs" style={{ color: 'var(--text-secondary)' }}>of {currentMonthRequired.toFixed(1)}h required</p>
             </div>
-            <div className="border bg-white p-4" style={{ borderColor: 'var(--line-soft)', borderRadius: 'var(--radius-sm)' }}>
+            <div className="summary-card border bg-white p-4" style={{ borderColor: 'var(--line)', borderRadius: 'var(--radius-sm)' }}>
               <p className="font-mono text-[10px] uppercase tracking-wide" style={{ color: 'var(--text-secondary)' }}>Variance</p>
               <p className="mt-2 text-2xl font-semibold" style={{ color: currentMonthVariance >= 0 ? 'var(--status-present)' : 'var(--status-absent)' }}>
                 {currentMonthVariance >= 0 ? '+' : ''}{currentMonthVariance.toFixed(1)}h
@@ -819,12 +793,12 @@ export default function AttendancePage() {
                 {currentMonthVariance >= 0 ? 'ahead of target' : 'behind target'}
               </p>
             </div>
-            <div className="border bg-white p-4" style={{ borderColor: 'var(--line-soft)', borderRadius: 'var(--radius-sm)' }}>
+            <div className="summary-card border bg-white p-4" style={{ borderColor: 'var(--line)', borderRadius: 'var(--radius-sm)' }}>
               <p className="font-mono text-[10px] uppercase tracking-wide" style={{ color: 'var(--text-secondary)' }}>Previous month</p>
               <p className="mt-2 text-2xl font-semibold" style={{ color: 'var(--ink)' }}>{previousMonthLogged.toFixed(1)}h</p>
               <p className="mt-1 text-xs" style={{ color: 'var(--text-secondary)' }}>{MONTH_NAMES[previousMonth - 1]} {previousYear}</p>
             </div>
-            <div className="border bg-white p-4" style={{ borderColor: 'var(--line-soft)', borderRadius: 'var(--radius-sm)' }}>
+            <div className="summary-card border bg-white p-4" style={{ borderColor: 'var(--line)', borderRadius: 'var(--radius-sm)' }}>
               <p className="font-mono text-[10px] uppercase tracking-wide" style={{ color: 'var(--text-secondary)' }}>Today's status</p>
               <p className="mt-2 text-2xl font-semibold" style={{ color: currentDayOpen ? 'var(--status-present)' : 'var(--ink)' }}>
                 {currentDayOpen ? 'Working' : 'Off'}

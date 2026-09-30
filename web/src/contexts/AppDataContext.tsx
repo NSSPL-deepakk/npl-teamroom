@@ -27,6 +27,7 @@ interface AppDataContextValue {
     designationsLoading: DesignationData['loading'];
     designationsError: DesignationData['error'];
     addDesignation: DesignationData['addDesignation'];
+    updateDesignation: DesignationData['updateDesignation'];
     removeDesignation: DesignationData['removeDesignation'];
     refreshDesignations: DesignationData['refresh'];
 }
@@ -56,6 +57,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
                 designationsLoading: designationData.loading,
                 designationsError: designationData.error,
                 addDesignation: designationData.addDesignation,
+                updateDesignation: designationData.updateDesignation,
                 removeDesignation: designationData.removeDesignation,
                 refreshDesignations: designationData.refresh,
             }}

@@ -5,7 +5,7 @@ import { useRecruitment } from '../data/recruitment';
 import { useOnboarding, type OnboardingRecord } from '../data/onboarding';
 import { useAppData } from '../contexts/AppDataContext';
 import { useEmployeeDocuments, type DocumentCategory } from '../data/employeeDocuments';
-import { createEmployeeAccount, useEmployeeAccounts } from '../lib/employeeAccounts';
+import { createEmployeeAccount, updateEmployeeAccountRole, useEmployeeAccounts } from '../lib/employeeAccounts';
 import { Drawer } from '../components/Drawer';
 import { StatusTag } from '../components/Ledger';
 import { ConfirmDialog } from '../components/ConfirmDialog';
@@ -27,7 +27,7 @@ type FormState = {
   manager_id: string;
   joining_date: string;
   work_mode: WorkMode;
-  role: Exclude<Role, 'SUPER_ADMIN'> | '';
+  role: Role | '';
   password: string;
   confirmPassword: string;
 };
@@ -67,7 +67,7 @@ export default function EmployeesPage() {
   const canManage = role === 'SUPER_ADMIN' || role === 'HR';
 
   const { employees, addEmployee, updateEmployee, toggleEmployeeStatus: toggleStatus, refreshEmployees, departments, designations } = useAppData();
-  const { accounts, refresh: refreshAccounts } = useEmployeeAccounts();
+  const { accounts, loading: accountsLoading, refresh: refreshAccounts } = useEmployeeAccounts();
   const { candidates, openings } = useRecruitment();
   const { records: onboardingRecords, activateEmployee, refresh: refreshOnboarding, loading: onboardingLoading } = useOnboarding(candidates);
 
@@ -87,7 +87,7 @@ export default function EmployeesPage() {
   const [selectedOnboardingId, setSelectedOnboardingId] = useState('');
   const [passwordError, setPasswordError] = useState('');
   const [submitError, setSubmitError] = useState('');
-  const departmentDesignations = designations.filter((designation) => !form.department_id || designation.department_id === form.department_id);
+  const departmentDesignations = designations.filter((designation) => !form.department_id || designation.department_ids.includes(form.department_id));
   const eligibleOnboardingRecords = useMemo(() => onboardingRecords.filter((record) => !record.employee_id), [onboardingRecords]);
 
   const managerCandidates = useMemo(
@@ -105,10 +105,19 @@ export default function EmployeesPage() {
   );
 
   useEffect(() => {
+    if (accountsLoading) return;
     if (!form.manager_id) return;
     if (managerCandidates.some((manager) => manager.id === form.manager_id)) return;
     setForm((current) => ({ ...current, manager_id: '' }));
-  }, [form.manager_id, managerCandidates]);
+  }, [accountsLoading, form.manager_id, managerCandidates]);
+
+  useEffect(() => {
+    if (!editingId || accountsLoading || form.role) return;
+    const account = accounts.find((item) => item.employee_id === editingId);
+    if (account && account.role !== 'SUPER_ADMIN') {
+      setForm((current) => ({ ...current, role: account.role as Exclude<Role, 'SUPER_ADMIN'> }));
+    }
+  }, [accounts, accountsLoading, editingId, form.role]);
 
   const { documents, addDocument, removeDocument } = useEmployeeDocuments(editingId);
   const [removeDocumentId, setRemoveDocumentId] = useState<string | null>(null);
@@ -171,13 +180,13 @@ export default function EmployeesPage() {
     setForm({
       name: emp.name,
       email: emp.email,
-      phone: emp.phone,
-      department_id: emp.department_id,
-      designation_id: emp.designation_id,
+      phone: emp.phone ?? '',
+      department_id: emp.department_id ?? '',
+      designation_id: emp.designation_id ?? '',
       manager_id: emp.manager_id ?? '',
       joining_date: emp.joining_date,
       work_mode: emp.work_mode,
-      role: '',
+      role: accounts.find((account) => account.employee_id === emp.id)?.role ?? '',
       password: '',
       confirmPassword: '',
     });
@@ -188,7 +197,13 @@ export default function EmployeesPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!form.name.trim() || !form.email.trim() || !form.department_id || !form.designation_id || !form.joining_date || (!editingId && !form.role) || (!editingId && employeeSource === 'ONBOARDING' && !selectedOnboardingId)) {
+    const hasLoginAccount = editingId ? accounts.some((account) => account.employee_id === editingId) : false;
+    if (editingId && accountsLoading) {
+      setSubmitError('Account details are still loading. Please try again.');
+      return;
+    }
+    if (!form.name.trim() || !form.email.trim() || !form.joining_date || (!editingId && (!form.department_id || !form.designation_id || !form.role)) || (editingId && hasLoginAccount && !form.role) || (!editingId && employeeSource === 'ONBOARDING' && !selectedOnboardingId)) {
+      setSubmitError('Complete the required fields before saving.');
       return;
     }
     if (!editingId && form.password.length < 8) {
@@ -202,18 +217,35 @@ export default function EmployeesPage() {
     const payload = {
       name: form.name.trim(),
       email: form.email.trim(),
-      phone: form.phone.trim(),
-      department_id: form.department_id,
-      designation_id: form.designation_id,
+      phone: form.phone?.trim() ?? '',
       manager_id: form.manager_id || null,
       joining_date: form.joining_date,
       work_mode: form.work_mode,
     };
     if (editingId) {
-      await updateEmployee(editingId, payload);
+      const editPayload = {
+        ...payload,
+        ...(form.department_id ? { department_id: form.department_id } : {}),
+        ...(form.designation_id ? { designation_id: form.designation_id } : {}),
+      };
+      const updateError = await updateEmployee(editingId, editPayload);
+      if (updateError) {
+        setSubmitError(`Employee details could not be saved: ${updateError}`);
+        return;
+      }
+      if (hasLoginAccount) {
+        if (form.role !== 'SUPER_ADMIN' || role === 'SUPER_ADMIN') {
+          const { error: roleError } = await updateEmployeeAccountRole(editingId, form.role as Role);
+          if (roleError) {
+            setSubmitError(`Employee details were saved, but the role could not be updated: ${roleError}`);
+            return;
+          }
+        }
+        await refreshAccounts();
+      }
     } else {
       if (!form.role) return;
-      const employeeId = await addEmployee({ ...payload, employment_status: 'ACTIVE' });
+      const employeeId = await addEmployee({ ...payload, department_id: form.department_id, designation_id: form.designation_id, employment_status: 'ACTIVE' });
       if (employeeId) {
         if (employeeSource === 'ONBOARDING') {
           const onboardingRecord = onboardingRecords.find((record) => record.id === selectedOnboardingId);
@@ -478,7 +510,7 @@ export default function EmployeesPage() {
           <div className="grid grid-cols-2 gap-4">
             <Field label="Department">
               <select
-                required
+                required={!editingId}
                 value={form.department_id}
                 onChange={(e) => setForm((f) => ({ ...f, department_id: e.target.value, designation_id: '' }))}
                 className="w-full border px-3 py-2 text-sm outline-none"
@@ -494,11 +526,12 @@ export default function EmployeesPage() {
                 ))}
               </select>
             </Field>
-            {!editingId && <Field label="Role">
+            <Field label="Role">
               <select
-                required
+                required={!editingId || accounts.some((account) => account.employee_id === editingId)}
+                disabled={Boolean(editingId && (accountsLoading || !accounts.some((account) => account.employee_id === editingId) || (role !== 'SUPER_ADMIN' && accounts.find((account) => account.employee_id === editingId)?.role === 'SUPER_ADMIN')))}
                 value={form.role}
-                onChange={(e) => setForm((f) => ({ ...f, role: e.target.value as Exclude<Role, 'SUPER_ADMIN'> }))}
+                onChange={(e) => setForm((f) => ({ ...f, role: e.target.value as Role }))}
                 className="w-full border px-3 py-2 text-sm outline-none"
                 style={inputStyle}
               >
@@ -510,11 +543,20 @@ export default function EmployeesPage() {
                     {option === 'EMPLOYEE' ? 'Employee' : option === 'MANAGER' ? 'Manager' : 'HR'}
                   </option>
                 ))}
+                {role === 'SUPER_ADMIN' && <option value="SUPER_ADMIN">Super Admin</option>}
+                {editingId && role !== 'SUPER_ADMIN' && accounts.find((account) => account.employee_id === editingId)?.role === 'SUPER_ADMIN' && (
+                  <option value="SUPER_ADMIN" disabled>Super Admin</option>
+                )}
               </select>
-            </Field>}
+              {editingId && !accountsLoading && !accounts.some((account) => account.employee_id === editingId) && (
+                <p className="mt-1 text-xs" style={{ color: 'var(--text-muted)' }}>
+                  No login account is linked to this employee.
+                </p>
+              )}
+            </Field>
             <Field label="Designation">
               <select
-                required
+                required={!editingId}
                 value={form.designation_id}
                 onChange={(e) => setForm((f) => ({ ...f, designation_id: e.target.value }))}
                 className="w-full border px-3 py-2 text-sm outline-none"

@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase';
 import { notifyAnnouncementCreated } from '../lib/notifications';
 import type { Employee } from './employees';
 
-export type HolidayCategory = 'National Holiday' | 'Optional Holiday' | 'Company Holiday' | 'Announcement';
+export type HolidayCategory = 'National Holiday' | 'Optional Holiday' | 'Company Holiday' | 'In-office celebration' | 'Announcement';
 const REAL_HOLIDAY_CATEGORIES: HolidayCategory[] = ['National Holiday', 'Optional Holiday', 'Company Holiday'];
 
 export interface Holiday {
@@ -284,7 +284,7 @@ export function useHolidays() {
   return { holidays: [...holidays].sort((a, b) => a.date.localeCompare(b.date)), addHoliday, updateHoliday, removeHoliday, loading, error, refresh };
 }
 
-export function useDashboardHolidays(employees: Employee[], limit = 5, enabled = true) {
+export function useDashboardHolidays(employees: Employee[], limit = 10, enabled = true) {
   const [holidays, setHolidays] = useState<DashboardEvent[]>([]);
   const [holidayCount, setHolidayCount] = useState(0);
   const [loading, setLoading] = useState(true);

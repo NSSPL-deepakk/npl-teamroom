@@ -148,6 +148,34 @@
       "when": 1789024800000,
       "tag": "0023_remove_deleted_event_notifications",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1790726400000,
+      "tag": "0024_designation_departments",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1790726460000,
+      "tag": "0025_unique_designation_names",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1790726520000,
+      "tag": "0026_company_document_hierarchy_visibility",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1790726580000,
+      "tag": "0027_holiday_in_office_celebration",
+      "breakpoints": true
     }
   ]
 }

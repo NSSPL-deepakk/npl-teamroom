@@ -45,7 +45,7 @@ export function UpcomingHolidays({ holidays, canManage = false, loading = false,
       });
     }
 
-    return mixed.sort((a, b) => a.date.localeCompare(b.date) || (a.event_time ?? '').localeCompare(b.event_time ?? '')).slice(0, 5);
+    return mixed.sort((a, b) => a.date.localeCompare(b.date) || (a.event_time ?? '').localeCompare(b.event_time ?? '')).slice(0, 10);
   }, [holidays]);
 
   return (

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 
 export type CompanyDocCategory = 'Policy' | 'Letter Template' | 'Form' | 'Other';
-export type CompanyDocVisibility = 'ALL' | 'MANAGER_ONLY' | 'SELECTED_EMPLOYEES';
+export type CompanyDocVisibility = 'ALL' | 'MANAGER_ONLY' | 'SELECTED_EMPLOYEES' | 'HIERARCHY';
 
 export interface CompanyDocument {
   id: string;
@@ -43,7 +43,7 @@ function toCategory(value: string | null | undefined): CompanyDocCategory {
 }
 
 function normalizeDocument(row: any): CompanyDocument {
-  const visibility = (row.visibility === 'MANAGER_ONLY' || row.visibility === 'SELECTED_EMPLOYEES'
+  const visibility = (row.visibility === 'MANAGER_ONLY' || row.visibility === 'SELECTED_EMPLOYEES' || row.visibility === 'HIERARCHY'
     ? row.visibility
     : row.is_visible_to_all === false ? 'MANAGER_ONLY' : 'ALL') as CompanyDocVisibility;
   return {
@@ -125,6 +125,9 @@ export function useCompanyDocuments() {
   const addDocument = useCallback(async (payload: { name: string; category: CompanyDocCategory; description?: string; file?: File; visibility: CompanyDocVisibility; visible_employee_ids: string[] }) => {
     if (!payload.file) {
       throw new Error('Please select a PDF, DOCX, or XLSX file first.');
+    }
+    if ((payload.visibility === 'SELECTED_EMPLOYEES' || payload.visibility === 'HIERARCHY') && payload.visible_employee_ids.length === 0) {
+      throw new Error('Select at least one employee for this visibility option.');
     }
     if (!isValidDocumentFile(payload.file)) {
       throw new Error('Only PDF, DOCX, and XLSX files are allowed.');

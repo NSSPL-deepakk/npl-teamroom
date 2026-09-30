@@ -22,6 +22,7 @@ import EmployeeAttendanceDetailPage from './pages/EmployeeAttendanceDetailPage';
 import RecruitmentPage from './pages/RecruitmentPage';
 import JobOpeningDetailPage from './pages/JobOpeningDetailPage';
 import OnboardingPage from './pages/OnboardingPage';
+import TeamPage from './pages/TeamPage';
 import AppShell from './layouts/AppShell';
 import ProtectedRoute, { RoleProtectedRoute } from './components/ProtectedRoute';
 import AIAssistantPage from './pages/AIAssistantPage';
@@ -59,7 +60,7 @@ export default function App() {
           <Route
             path="/ai-assistant"
             element={<AIAssistantPage />}
-/>
+          />
           <Route
             path="projects"
             element={<RoleProtectedRoute allowedRoles={['SUPER_ADMIN', 'HR', 'MANAGER']}><ProjectsPage /></RoleProtectedRoute>}
@@ -72,6 +73,7 @@ export default function App() {
           <Route path="recruitment/jobs/:id" element={<JobOpeningDetailPage />} />
           <Route path="candidates" element={<RecruitmentPage />} />
           <Route path="onboarding" element={<OnboardingPage />} />
+          <Route path="team" element={<RoleProtectedRoute allowedRoles={['MANAGER']}><TeamPage /></RoleProtectedRoute>} />
           <Route path="*" element={<PlaceholderPage />} />
         </Route>
       </Routes>

@@ -13,7 +13,7 @@ export async function createEmployeeAccount(payload: {
     email: string;
     name: string;
     password: string;
-    role: Exclude<Role, 'SUPER_ADMIN'>;
+    role: Role;
 }) {
     let data;
     let error;
@@ -40,11 +40,25 @@ export async function createEmployeeAccount(payload: {
     return { data: null, error: message };
 }
 
+export async function updateEmployeeAccountRole(employeeId: string, role: Role) {
+    const { data, error } = await supabase
+        .from('profiles')
+        .update({ role })
+        .eq('employee_id', employeeId)
+        .select('employee_id');
+
+    if (error) return { error: error.message };
+    if (!data?.length) return { error: 'No login account is linked to this employee.' };
+    return { error: null };
+}
+
 export function useEmployeeAccounts() {
     const [accounts, setAccounts] = useState<EmployeeAccount[]>([]);
     const [error, setError] = useState<string | null>(null);
+    const [loading, setLoading] = useState(true);
 
     const refresh = useCallback(async () => {
+        setLoading(true);
         const { data, error: fetchError } = await supabase
             .from('profiles')
             .select('employee_id, role, login_enabled')
@@ -55,11 +69,12 @@ export function useEmployeeAccounts() {
             setError(null);
             setAccounts((data ?? []) as EmployeeAccount[]);
         }
+        setLoading(false);
     }, []);
 
     useEffect(() => {
         refresh();
     }, [refresh]);
 
-    return { accounts, error, refresh };
+    return { accounts, error, loading, refresh };
 }

@@ -76,8 +76,8 @@ export function StatCard({
       aria-pressed={handleClick ? selected : undefined}
       onClick={handleClick}
       onKeyDown={(event) => { if (handleClick && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); handleClick(); } }}
-      className={`relative overflow-hidden border bg-white px-5 py-4 ${handleClick ? 'cursor-pointer transition-colors transition-shadow hover:bg-[var(--paper)] hover:shadow-sm' : ''}`}
-      style={{ borderColor: selected ? s.color : 'var(--line-soft)', borderRadius: 'var(--radius-md)', boxShadow: selected ? `inset 0 -2px 0 ${s.color}` : undefined }}
+      className={`summary-card relative overflow-hidden border bg-white px-5 py-4 ${handleClick ? 'cursor-pointer transition-colors hover:bg-[var(--paper)]' : ''}`}
+      style={{ borderColor: selected ? s.color : 'var(--line)', borderRadius: 'var(--radius-md)', boxShadow: selected ? `inset 0 -2px 0 ${s.color}, var(--card-shadow)` : undefined }}
     >
       <span className="absolute left-0 top-0 h-full w-[3px]" style={{ background: s.color }} />
       <p className="font-mono text-[11px] uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>

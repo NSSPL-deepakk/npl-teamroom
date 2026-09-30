@@ -5,14 +5,14 @@ const corsHeaders = {
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const allowedRoles = new Set(['EMPLOYEE', 'MANAGER', 'HR']);
+const allowedRoles = new Set(['EMPLOYEE', 'MANAGER', 'HR', 'SUPER_ADMIN']);
 
 type CreateAccountRequest = {
     employee_id: string;
     email: string;
     name: string;
     password: string;
-    role: 'EMPLOYEE' | 'MANAGER' | 'HR';
+    role: 'EMPLOYEE' | 'MANAGER' | 'HR' | 'SUPER_ADMIN';
 };
 
 function json(body: Record<string, unknown>, status = 200) {
@@ -74,6 +74,10 @@ Deno.serve(async (request) => {
     if (!payload.employee_id || !payload.email || !payload.name || !payload.password || !allowedRoles.has(payload.role)) {
         console.error('[create-employee-account] Required account fields are missing or invalid');
         return json({ error: 'employee_id, email, name, password, and a valid role are required' }, 400);
+    }
+    if (payload.role === 'SUPER_ADMIN' && callerProfile.role !== 'SUPER_ADMIN') {
+        console.error('[create-employee-account] Caller is not authorized to assign SUPER_ADMIN');
+        return json({ error: 'Only a Super Admin can create another Super Admin account' }, 403);
     }
     if (payload.password.length < 8) {
         console.error('[create-employee-account] Password is too short');

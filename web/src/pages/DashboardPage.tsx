@@ -5,7 +5,6 @@ import { StatCard, LedgerPanel, LedgerRow } from '../components/Ledger';
 import { RosterStrip } from '../components/RosterStrip';
 import { AttendanceDonut } from '../components/AttendanceDonut';
 import { UpcomingHolidays } from '../components/UpcomingHolidays';
-import { QuickLinks } from '../components/QuickLinks';
 import { useDashboardHolidays, type DashboardEvent } from '../data/holidays';
 import { supabase } from '../lib/supabase';
 import { useCurrentEmployee } from '../data/currentUser';
@@ -265,17 +264,36 @@ function ManagerDashboard({ holidayData }: { holidayData: DashboardHolidayData }
 function EmployeeDashboard({ role, holidayData }: { role: Role; holidayData: DashboardHolidayData }) {
   const { employees } = useAppData();
   const employee = useCurrentEmployee(role, employees);
-  const { tasks } = useTasks();
-  const myTasks = employee ? tasks.filter((t) => t.assigned_to === employee.id).slice(0, 4) : [];
-  const openCount = myTasks.filter((t) => t.status !== 'COMPLETED').length;
+  const today = new Date().toLocaleDateString('en-CA');
+  const { records: attendanceRecords, loading: attendanceLoading } = useAttendance({
+    employeeId: employee?.id,
+    startDate: today,
+    endDate: today,
+  });
+  const { tasks, loading: tasksLoading } = useTasks();
+  const employeeTasks = employee ? tasks.filter((task) => task.assigned_to === employee.id) : [];
+  const myTasks = employeeTasks.slice(0, 4);
+  const openCount = employeeTasks.filter((task) => task.status !== 'COMPLETED').length;
+  const latestAttendance = [...attendanceRecords]
+    .filter((record) => record.employee_id === employee?.id)
+    .sort((a, b) => (b.check_in ?? '').localeCompare(a.check_in ?? ''))[0];
+  const todayStatus = latestAttendance?.check_in
+    ? latestAttendance.check_out ? 'Checked out' : 'Checked in'
+    : 'Not checked in';
+  const attendanceEvents = attendanceRecords
+    .filter((record) => record.employee_id === employee?.id)
+    .sort((a, b) => (a.check_in ?? '').localeCompare(b.check_in ?? ''))
+    .flatMap((record) => [
+      ...(record.check_in ? [{ time: record.check_in.slice(0, 5), label: `Checked in — ${record.work_mode}`, status: 'present' as const }] : []),
+      ...(record.check_out ? [{ time: record.check_out.slice(0, 5), label: 'Checked out', status: 'neutral' as const }] : []),
+    ]);
 
   return (
     <>
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <StatCard label="Today" value="Checked in" status="present" />
-        <StatCard label="Work mode" value="WFH" status="structure" />
-        <StatCard label="Leave balance" value="14 days" status="present" />
-        <StatCard label="Open tasks" value={openCount} status="pending" />
+        <StatCard label="Today" value={attendanceLoading ? 'Loading…' : todayStatus} status={latestAttendance?.check_in ? 'present' : 'neutral'} />
+        <StatCard label="Work mode" value={attendanceLoading ? 'Loading…' : latestAttendance?.work_mode ?? '—'} status="structure" />
+        <StatCard label="Open tasks" value={tasksLoading ? 'Loading…' : openCount} status="pending" />
       </div>
       <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_1fr_1fr]">
         <LedgerPanel title="My tasks">
@@ -302,28 +320,18 @@ function EmployeeDashboard({ role, holidayData }: { role: Role; holidayData: Das
             Today's register
           </h3>
           <div className="mt-4">
-            <RosterStrip
-              events={[
-                { time: '09:12', label: 'Checked in — WFH', status: 'present' },
-                { time: '13:00', label: 'Break', status: 'neutral' },
-                { time: '13:32', label: 'Resumed', status: 'present' },
-              ]}
-            />
+            {attendanceLoading ? (
+              <p className="text-sm" style={{ color: 'var(--text-on-ink-muted)' }}>Loading today&apos;s attendance…</p>
+            ) : attendanceEvents.length > 0 ? (
+              <RosterStrip events={attendanceEvents} />
+            ) : (
+              <p className="text-sm" style={{ color: 'var(--text-on-ink-muted)' }}>No attendance activity yet.</p>
+            )}
           </div>
         </div>
         <UpcomingHolidays holidays={holidayData.holidays} loading={holidayData.loading} error={holidayData.error} />
       </div>
 
-      <div className="mt-6 grid gap-6 lg:grid-cols-2">
-        <QuickLinks
-          links={[
-            { label: 'Apply leave', path: '/leave' },
-            { label: 'Regularize attendance', path: '/attendance' },
-            { label: 'Log task time', path: '/tasks' },
-          ]}
-        />
-        <div />
-      </div>
     </>
   );
 }

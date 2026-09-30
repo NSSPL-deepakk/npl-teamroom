@@ -10,6 +10,8 @@ import {
   timestamp,
   pgPolicy,
   index,
+  primaryKey,
+  uniqueIndex,
 } from 'drizzle-orm/pg-core';
 import { authUsers, authenticatedRole } from 'drizzle-orm/supabase';
 
@@ -24,6 +26,7 @@ export const holidayCategoryEnum = pgEnum('holiday_category', [
   'National Holiday',
   'Optional Holiday',
   'Company Holiday',
+  'In-office celebration',
   'Announcement',
 ]);
 export const leaveTypeEnum = pgEnum('leave_type', ['Casual', 'Sick', 'Annual', 'Other']);
@@ -76,7 +79,10 @@ export const designations = pgTable(
     departmentId: uuid('department_id').notNull().references(() => departments.id, { onDelete: 'restrict' }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
-  () => [
+  (table) => [
+    uniqueIndex('designations_name_normalized_uidx').on(
+      sql`lower(regexp_replace(btrim(${table.name}), '[[:space:]]+', ' ', 'g'))`,
+    ),
     pgPolicy('designations_select_authenticated', {
       for: 'select',
       to: authenticatedRole,
@@ -87,6 +93,28 @@ export const designations = pgTable(
       to: authenticatedRole,
       using: isAdminOrHr,
       withCheck: isAdminOrHr,
+    }),
+  ],
+).enableRLS();
+
+export const designationDepartments = pgTable(
+  'designation_departments',
+  {
+    designationId: uuid('designation_id').notNull().references(() => designations.id, { onDelete: 'cascade' }),
+    departmentId: uuid('department_id').notNull().references(() => departments.id, { onDelete: 'cascade' }),
+  },
+  (table) => [
+    primaryKey({ columns: [table.designationId, table.departmentId] }),
+    pgPolicy('designation_departments_select_authenticated', {
+      for: 'select',
+      to: authenticatedRole,
+      using: sql`true`,
+    }),
+    pgPolicy('designation_departments_write_admin_hr', {
+      for: 'all',
+      to: authenticatedRole,
+      using: sql`public.current_app_role() in ('SUPER_ADMIN', 'HR')`,
+      withCheck: sql`public.current_app_role() in ('SUPER_ADMIN', 'HR')`,
     }),
   ],
 ).enableRLS();

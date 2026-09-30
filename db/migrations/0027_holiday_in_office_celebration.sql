@@ -1,0 +1,1 @@
+ALTER TYPE public.holiday_category ADD VALUE IF NOT EXISTS 'In-office celebration';

@@ -1,19 +1,19 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
 import { useAppData } from '../contexts/AppDataContext';
-import { formatHolidayDateTime, getComputedEmployeeEvents, getTodayIso, resolveEventImage, stripMarkdown, useHolidays, type HolidayCategory } from '../data/holidays';
+import { formatHolidayDateTime, getTodayIso, getUpcomingEmployeeEvents, resolveEventImage, stripMarkdown, useHolidays, type HolidayCategory } from '../data/holidays';
 import type { Role } from '../data/roles';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 
 type Ctx = { role: Role };
-type FilterKey = 'ALL' | 'Holiday' | 'Announcement' | 'Birthday' | 'Anniversary';
+type FilterKey = 'ALL' | 'Holiday' | 'In-office celebration' | 'Announcement' | 'Birthday' | 'Anniversary';
 
 type CalendarRow = {
   id: string;
   date: string;
   event_time?: string | null;
   name: string;
-  kind: 'Holiday' | 'Announcement' | 'Birthday' | 'Anniversary';
+  kind: 'Holiday' | 'In-office celebration' | 'Announcement' | 'Birthday' | 'Anniversary';
   group: HolidayCategory | 'Birthday' | 'Anniversary';
   description?: string | null;
   image?: string | null;
@@ -22,8 +22,10 @@ type CalendarRow = {
   employeeId?: string;
 };
 
-const FILTERS: FilterKey[] = ['ALL', 'Holiday', 'Announcement', 'Birthday', 'Anniversary'];
-const CATEGORY_OPTIONS: HolidayCategory[] = ['National Holiday', 'Optional Holiday', 'Company Holiday', 'Announcement'];
+const FILTERS: FilterKey[] = ['ALL', 'Holiday', 'In-office celebration', 'Announcement', 'Birthday', 'Anniversary'];
+const CATEGORY_OPTIONS: HolidayCategory[] = ['National Holiday', 'Optional Holiday', 'Company Holiday', 'In-office celebration', 'Announcement'];
+const PAGE_SIZE = 10;
+const UPCOMING_WINDOW_DAYS = 10;
 
 function rowStyle(group: CalendarRow['group']) {
   switch (group) {
@@ -31,6 +33,8 @@ function rowStyle(group: CalendarRow['group']) {
     case 'Optional Holiday':
     case 'Company Holiday':
       return { background: 'var(--accent-holiday-bg)', color: 'var(--accent-holiday)' };
+    case 'In-office celebration':
+      return { background: '#ECFDF5', color: '#047857' };
     case 'Announcement':
       return { background: '#E0F2FE', color: '#0F766E' };
     case 'Birthday':
@@ -58,7 +62,12 @@ export default function HolidaysPage() {
   const [messageDraft, setMessageDraft] = useState('');
   const [messageError, setMessageError] = useState('');
   const [filter, setFilter] = useState<FilterKey>('ALL');
+  const [page, setPage] = useState(1);
   const [removeId, setRemoveId] = useState<string | null>(null);
+  const today = getTodayIso();
+  const windowEndDate = new Date(`${today}T00:00:00`);
+  windowEndDate.setDate(windowEndDate.getDate() + UPCOMING_WINDOW_DAYS - 1);
+  const lastDateInWindow = `${windowEndDate.getFullYear()}-${String(windowEndDate.getMonth() + 1).padStart(2, '0')}-${String(windowEndDate.getDate()).padStart(2, '0')}`;
 
   function handleImageUpload(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -74,7 +83,7 @@ export default function HolidaysPage() {
   }
 
   const generatedRows = useMemo<CalendarRow[]>(() => {
-    return employees.flatMap((employee) => getComputedEmployeeEvents(employee)).map((event) => ({
+    return employees.flatMap((employee) => getUpcomingEmployeeEvents(employee, new Date(`${today}T00:00:00`), UPCOMING_WINDOW_DAYS - 1)).map((event) => ({
       id: event.id,
       date: event.date,
       event_time: null,
@@ -87,7 +96,7 @@ export default function HolidaysPage() {
       source: 'computed',
       employeeId: event.employeeId,
     }));
-  }, [employees]);
+  }, [employees, today]);
 
   const combined = useMemo<CalendarRow[]>(() => {
     const manual: CalendarRow[] = holidays.map((h) => ({
@@ -95,7 +104,7 @@ export default function HolidaysPage() {
       date: h.date,
       event_time: h.event_time ?? null,
       name: h.name,
-      kind: h.category === 'Announcement' ? 'Announcement' : 'Holiday',
+      kind: h.category === 'Announcement' ? 'Announcement' : h.category === 'In-office celebration' ? 'In-office celebration' : 'Holiday',
       group: h.category,
       description: h.description ?? null,
       image: h.image ?? null,
@@ -103,14 +112,22 @@ export default function HolidaysPage() {
       source: 'manual',
     }));
 
-    return [...manual, ...generatedRows].filter((row) => row.date >= getTodayIso()).sort((a, b) => a.date.localeCompare(b.date));
-  }, [generatedRows, holidays]);
+    return [...manual, ...generatedRows]
+      .filter((row) => row.date >= today && row.date <= lastDateInWindow)
+      .sort((a, b) => a.date.localeCompare(b.date) || (a.event_time ?? '').localeCompare(b.event_time ?? ''));
+  }, [generatedRows, holidays, today, lastDateInWindow]);
 
   const filtered = combined.filter((row) => {
     if (filter === 'ALL') return true;
     if (filter === 'Holiday') return row.kind === 'Holiday';
     return row.kind === filter;
   });
+  const pageCount = Math.ceil(filtered.length / PAGE_SIZE);
+  const pageRows = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
+  useEffect(() => {
+    setPage((current) => Math.min(current, Math.max(1, pageCount)));
+  }, [pageCount]);
 
   function resetForm() {
     setDate('');
@@ -191,7 +208,7 @@ export default function HolidaysPage() {
         {FILTERS.map((tab) => (
           <button
             key={tab}
-            onClick={() => setFilter(tab)}
+            onClick={() => { setFilter(tab); setPage(1); }}
             className="border px-3 py-1.5 font-mono text-[11px] uppercase tracking-wide transition-colors"
             style={{
               background: filter === tab ? 'var(--ink)' : 'white',
@@ -209,7 +226,7 @@ export default function HolidaysPage() {
         <div className="border bg-white" style={{ borderColor: 'var(--line-soft)', borderRadius: 'var(--radius-md)' }}>
           <div className="border-b px-5 py-3.5" style={{ borderColor: 'var(--line-soft)' }}>
             <h3 className="text-sm font-semibold" style={{ color: 'var(--ink)' }}>
-              {filtered.length} item{filtered.length !== 1 ? 's' : ''} in view
+              {filtered.length} item{filtered.length !== 1 ? 's' : ''} in the next {UPCOMING_WINDOW_DAYS} days
             </h3>
           </div>
           {filtered.length === 0 ? (
@@ -218,7 +235,7 @@ export default function HolidaysPage() {
             </p>
           ) : (
             <ul>
-              {filtered.map((row) => {
+              {pageRows.map((row) => {
                 const tag = rowStyle(row.group);
                 return (
                   <li
@@ -323,6 +340,29 @@ export default function HolidaysPage() {
                 );
               })}
             </ul>
+          )}
+          {pageCount > 1 && (
+            <nav className="flex items-center justify-between border-t px-5 py-3" style={{ borderColor: 'var(--line-soft)' }} aria-label="Calendar pagination">
+              <button
+                type="button"
+                onClick={() => setPage((current) => Math.max(1, current - 1))}
+                disabled={page === 1}
+                className="border px-3 py-1.5 text-xs font-medium disabled:opacity-50"
+                style={{ borderColor: 'var(--line)', borderRadius: 'var(--radius-sm)', color: 'var(--ink)' }}
+              >
+                Previous
+              </button>
+              <span className="font-mono text-xs" style={{ color: 'var(--text-secondary)' }}>Page {page} of {pageCount}</span>
+              <button
+                type="button"
+                onClick={() => setPage((current) => Math.min(pageCount, current + 1))}
+                disabled={page === pageCount}
+                className="border px-3 py-1.5 text-xs font-medium disabled:opacity-50"
+                style={{ borderColor: 'var(--line)', borderRadius: 'var(--radius-sm)', color: 'var(--ink)' }}
+              >
+                Next
+              </button>
+            </nav>
           )}
         </div>
 

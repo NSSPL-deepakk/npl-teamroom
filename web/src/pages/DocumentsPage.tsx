@@ -47,7 +47,7 @@ export default function DocumentsPage() {
 
   const documentViewers = useMemo(() => {
     if (!selectedDocument) return [];
-    const ids = selectedDocument.visibility === 'SELECTED_EMPLOYEES'
+    const ids = selectedDocument.visibility === 'SELECTED_EMPLOYEES' || selectedDocument.visibility === 'HIERARCHY'
       ? selectedDocument.visible_employee_ids
       : selectedDocument.visibility === 'MANAGER_ONLY'
         ? managerEmployeeIds
@@ -110,7 +110,7 @@ export default function DocumentsPage() {
       setUploadError('Please select a PDF, DOCX, or XLSX file.');
       return;
     }
-    if (visibility === 'SELECTED_EMPLOYEES' && selectedEmployeeIds.length === 0) {
+    if ((visibility === 'SELECTED_EMPLOYEES' || visibility === 'HIERARCHY') && selectedEmployeeIds.length === 0) {
       setUploadError('Select at least one employee for this visibility option.');
       return;
     }
@@ -121,7 +121,7 @@ export default function DocumentsPage() {
         category,
         description: description.trim() || undefined,
         visibility,
-        visible_employee_ids: visibility === 'SELECTED_EMPLOYEES' ? selectedEmployeeIds : [],
+        visible_employee_ids: visibility === 'SELECTED_EMPLOYEES' || visibility === 'HIERARCHY' ? selectedEmployeeIds : [],
         file,
       });
       setName('');
@@ -239,7 +239,7 @@ export default function DocumentsPage() {
                   )}
                   {canManage && d.visibility !== 'ALL' && (
                     <span className="mt-1 inline-flex px-1.5 py-0.5 font-mono text-[10px] uppercase" style={{ background: 'var(--status-neutral-bg)', color: 'var(--text-secondary)', borderRadius: 'var(--radius-sm)' }}>
-                      {d.visibility === 'MANAGER_ONLY' ? 'Manager only' : 'Selected employees'}
+                      {d.visibility === 'MANAGER_ONLY' ? 'Manager only' : d.visibility === 'HIERARCHY' ? 'Reporting hierarchy' : 'Selected employees'}
                     </span>
                   )}
                   <div className="mt-2 flex items-center gap-2 text-xs" style={{ color: 'var(--text-muted)' }}>
@@ -316,8 +316,13 @@ export default function DocumentsPage() {
               <div>
                 <p className="font-mono text-[10px] uppercase tracking-wide" style={{ color: 'var(--text-secondary)' }}>Visible to</p>
                 <p className="mt-1 text-sm" style={{ color: 'var(--ink)' }}>
-                  {selectedDocument.visibility === 'ALL' ? 'All employees' : selectedDocument.visibility === 'MANAGER_ONLY' ? 'Managers' : 'HR, managers & selected employees'}
+                  {selectedDocument.visibility === 'ALL' ? 'All employees' : selectedDocument.visibility === 'MANAGER_ONLY' ? 'Managers' : selectedDocument.visibility === 'HIERARCHY' ? 'Assigned employees and their reporting-line authorities' : 'HR, managers & selected employees'}
                 </p>
+                {selectedDocument.visibility === 'HIERARCHY' && (
+                  <p className="mt-1 text-xs" style={{ color: 'var(--text-secondary)' }}>
+                    The selected employees and the managers above them can view this document.
+                  </p>
+                )}
                 <div className="mt-2 space-y-2">
                   {documentViewers.length === 0 ? (
                     <p className="text-xs" style={{ color: 'var(--text-muted)' }}>No employee details available.</p>
@@ -533,17 +538,20 @@ export default function DocumentsPage() {
                       <option value="SELECTED_EMPLOYEES">
                         Visible to HR, managers & selected employees
                       </option>
+                      <option value="HIERARCHY">
+                        Visible to selected employees and their reporting hierarchy
+                      </option>
                     </select>
                   </label>
 
                   {/* Selected Employees */}
-                  {visibility === 'SELECTED_EMPLOYEES' && (
+                  {(visibility === 'SELECTED_EMPLOYEES' || visibility === 'HIERARCHY') && (
                     <div>
                       <span
                         className="text-xs font-medium uppercase tracking-wide"
                         style={{ color: 'var(--text-secondary)' }}
                       >
-                        Selected employees
+                        {visibility === 'HIERARCHY' ? 'Employees in reporting hierarchy' : 'Selected employees'}
                       </span>
 
                       <input
