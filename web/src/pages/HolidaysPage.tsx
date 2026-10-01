@@ -25,7 +25,7 @@ type CalendarRow = {
 const FILTERS: FilterKey[] = ['ALL', 'Holiday', 'In-office celebration', 'Announcement', 'Birthday', 'Anniversary'];
 const CATEGORY_OPTIONS: HolidayCategory[] = ['National Holiday', 'Optional Holiday', 'Company Holiday', 'In-office celebration', 'Announcement'];
 const PAGE_SIZE = 10;
-const UPCOMING_WINDOW_MONTHS = 3;
+const UPCOMING_WINDOW_MONTHS = 6;
 
 function rowStyle(group: CalendarRow['group']) {
   switch (group) {
