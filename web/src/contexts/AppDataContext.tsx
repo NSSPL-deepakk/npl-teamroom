@@ -11,6 +11,7 @@ type DesignationData = ReturnType<typeof useDesignations>;
 
 interface AppDataContextValue {
     employees: EmployeeData['employees'];
+    activeEmployees: EmployeeData['employees'];
     employeesLoading: EmployeeData['loading'];
     employeesError: EmployeeData['error'];
     addEmployee: EmployeeData['addEmployee'];
@@ -21,6 +22,7 @@ interface AppDataContextValue {
     departmentsLoading: DepartmentData['loading'];
     departmentsError: DepartmentData['error'];
     addDepartment: DepartmentData['addDepartment'];
+    updateDepartment: DepartmentData['updateDepartment'];
     removeDepartment: DepartmentData['removeDepartment'];
     refreshDepartments: DepartmentData['refresh'];
     designations: DesignationData['designations'];
@@ -36,11 +38,13 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     const employeeData = useEmployees();
     const departmentData = useDepartments();
     const designationData = useDesignations();
+    const activeEmployees = employeeData.employees.filter((employee) => employee.employment_status === 'ACTIVE');
 
     return (
         <AppDataContext.Provider
             value={{
                 employees: employeeData.employees,
+                activeEmployees,
                 employeesLoading: employeeData.loading,
                 employeesError: employeeData.error,
                 addEmployee: employeeData.addEmployee,
@@ -51,6 +55,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
                 departmentsLoading: departmentData.loading,
                 departmentsError: departmentData.error,
                 addDepartment: departmentData.addDepartment,
+                updateDepartment: departmentData.updateDepartment,
                 removeDepartment: departmentData.removeDepartment,
                 refreshDepartments: departmentData.refresh,
                 designations: designationData.designations,

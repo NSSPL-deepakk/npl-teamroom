@@ -17,7 +17,13 @@ export default function ProtectedRoute({ children }: { children: ReactNode }) {
   }
 
   if (!session || !profile) {
-    const reason = signOutReason === 'logged_in_elsewhere' ? 'logged_in_elsewhere' : signOutReason === 'manual' ? undefined : 'session_expired';
+    const reason = signOutReason === 'logged_in_elsewhere'
+      ? 'logged_in_elsewhere'
+      : signOutReason === 'deactivated'
+        ? 'deactivated'
+        : signOutReason === 'manual'
+          ? undefined
+          : 'session_expired';
     return <Navigate to="/login" replace state={reason ? { reason } : undefined} />;
   }
 

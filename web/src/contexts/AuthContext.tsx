@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import type { Role } from '../data/roles';
@@ -14,7 +14,8 @@ export interface Profile {
 }
 
 export const LOGGED_IN_ELSEWHERE_MESSAGE = 'You were signed out because this account was signed in on another device or browser.';
-export type SignOutReason = 'manual' | 'session_expired' | 'logged_in_elsewhere';
+export const EMPLOYEE_DEACTIVATED_MESSAGE = 'Your account has been deactivated. Please contact HR.';
+export type SignOutReason = 'manual' | 'session_expired' | 'logged_in_elsewhere' | 'deactivated';
 
 interface AuthContextValue {
   session: Session | null;
@@ -37,6 +38,15 @@ async function fetchProfile(userId: string): Promise<Profile | null> {
 
   if (error || !data) return null;
   return data as Profile;
+}
+
+async function isCurrentEmployeeActive(): Promise<boolean | null> {
+  const { data, error } = await supabase.rpc('is_current_employee_active');
+  if (error) {
+    console.error('[Auth] Could not verify employee status:', error);
+    return null;
+  }
+  return data === true;
 }
 
 async function recordActivity(userId: string) {
@@ -107,6 +117,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const pendingLogin = useRef(false);
   const signOutReasonRef = useRef<SignOutReason | null>(null);
 
+  const signOut = useCallback(async (reason: SignOutReason = 'manual') => {
+    signOutReasonRef.current = reason;
+    setSignOutReason(reason);
+    clearClientSessionState();
+    setActiveSessionId(null);
+    setSession(null);
+    setProfile(null);
+    await supabase.auth.signOut();
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
 
@@ -116,6 +136,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(data.session);
       setActiveSessionId(sessionStorage.getItem('active_session_id'));
       if (data.session) {
+        const employeeActive = await isCurrentEmployeeActive();
+        if (employeeActive !== true) {
+          const reason = employeeActive === false ? 'deactivated' : 'session_expired';
+          await signOut(reason);
+          if (!cancelled) setLoading(false);
+          return;
+        }
         if (!sessionStorage.getItem('active_session_id') && !pendingLogin.current) {
           const restored = await restoreActiveSession(data.session);
           if (!restored.error && !restored.sessionId) {
@@ -155,11 +182,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     init();
 
     const { data: listener } = supabase.auth.onAuthStateChange(async (event, newSession) => {
-      if (event === 'TOKEN_REFRESHED') return;
+      if (event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION') return;
 
       setSession(newSession);
       if (newSession) {
         if (pendingLogin.current) return;
+        const employeeActive = await isCurrentEmployeeActive();
+        if (employeeActive !== true) {
+          await signOut(employeeActive === false ? 'deactivated' : 'session_expired');
+          setLoading(false);
+          return;
+        }
         const p = await fetchProfile(newSession.user.id);
         if (!p) {
           clearClientSessionState();
@@ -188,7 +221,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       cancelled = true;
       listener.subscription.unsubscribe();
     };
-  }, []);
+  }, [signOut]);
+
+  useEffect(() => {
+    if (!session) return;
+    let checking = false;
+
+    async function verifyEmployeeStatus() {
+      if (!session || document.visibilityState !== 'visible' || checking || pendingLogin.current) return;
+      checking = true;
+      const restored = await restoreActiveSession(session);
+      if (restored.sessionId) {
+        setActiveSessionId(restored.sessionId);
+        checking = false;
+        return;
+      }
+      const employeeActive = await isCurrentEmployeeActive();
+      checking = false;
+      const reason = employeeActive === false
+        ? 'deactivated'
+        : restored.error
+          ? 'session_expired'
+          : 'logged_in_elsewhere';
+      await signOut(reason);
+    }
+
+    window.addEventListener('focus', verifyEmployeeStatus);
+    document.addEventListener('visibilitychange', verifyEmployeeStatus);
+    return () => {
+      window.removeEventListener('focus', verifyEmployeeStatus);
+      document.removeEventListener('visibilitychange', verifyEmployeeStatus);
+    };
+  }, [session, signOut]);
 
   async function signIn(email: string, password: string) {
     signOutReasonRef.current = null;
@@ -200,6 +264,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return { error: error.message };
     }
 
+    const employeeActive = await isCurrentEmployeeActive();
+    if (employeeActive !== true) {
+      pendingLogin.current = false;
+      const reason = employeeActive === false ? 'deactivated' : 'session_expired';
+      await signOut(reason);
+      return {
+        error: employeeActive === false
+          ? EMPLOYEE_DEACTIVATED_MESSAGE
+          : 'Could not verify your employee status. Please try again.',
+      };
+    }
+
     const claim = await claimActiveSession(data.session);
     if (claim.error) {
       pendingLogin.current = false;
@@ -209,22 +285,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     setActiveSessionId(claim.sessionId);
     const profile = await fetchProfile(data.session.user.id);
+    if (!profile) {
+      pendingLogin.current = false;
+      await signOut('session_expired');
+      return { error: 'Could not load your account profile. Please try again.' };
+    }
     setProfile(profile);
     await recordActivity(data.session.user.id);
     pendingLogin.current = false;
     setLoading(false);
 
     return { error: null };
-  }
-
-  async function signOut(reason: SignOutReason = 'manual') {
-    signOutReasonRef.current = reason;
-    setSignOutReason(reason);
-    clearClientSessionState();
-    setActiveSessionId(null);
-    setSession(null);
-    setProfile(null);
-    await supabase.auth.signOut();
   }
 
   return (

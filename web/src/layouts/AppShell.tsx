@@ -2,7 +2,7 @@ import { Outlet, useNavigate } from 'react-router-dom';
 import { Sidebar } from '../components/Sidebar';
 import { ROLE_LABEL, type Role } from '../data/roles';
 import { type Gender } from '../data/employees';
-import { LOGGED_IN_ELSEWHERE_MESSAGE, useAuth } from '../contexts/AuthContext';
+import { EMPLOYEE_DEACTIVATED_MESSAGE, LOGGED_IN_ELSEWHERE_MESSAGE, useAuth } from '../contexts/AuthContext';
 import { AppDataProvider, useAppData } from '../contexts/AppDataContext';
 import { supabase } from '../lib/supabase';
 import { Drawer } from '../components/Drawer';
@@ -188,11 +188,14 @@ function AppShellContent() {
           if (newSessionId === currentSessionId || replacementRedirecting.current) return;
 
           replacementRedirecting.current = true;
+          const { data: employeeActive } = await supabase.rpc('is_current_employee_active');
+          const reason = employeeActive === false ? 'deactivated' : 'logged_in_elsewhere';
+          const message = reason === 'deactivated' ? EMPLOYEE_DEACTIVATED_MESSAGE : LOGGED_IN_ELSEWHERE_MESSAGE;
           sessionStorage.removeItem('active_session_id');
-          await authSignOut('logged_in_elsewhere');
+          await authSignOut(reason);
           navigate('/login', {
             replace: true,
-            state: { reason: 'logged_in_elsewhere', message: LOGGED_IN_ELSEWHERE_MESSAGE },
+            state: { reason, message },
           });
         },
       )

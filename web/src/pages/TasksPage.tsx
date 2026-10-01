@@ -124,7 +124,7 @@ function TaskRow({
 export default function TasksPage() {
   const navigate = useNavigate();
   const { role } = useOutletContext<Ctx>();
-  const { employees } = useAppData();
+  const { employees, activeEmployees } = useAppData();
   const employee = useCurrentEmployee(role, employees);
   const { clients, loading: clientsLoading, error: clientsError } = useClients();
   const { projects, loading: projectsLoading, error: projectsError } = useProjects();
@@ -143,12 +143,12 @@ export default function TasksPage() {
   const visibleTasks = useMemo(() => {
     if (role === 'HR' || role === 'SUPER_ADMIN') return tasks;
     if (role === 'MANAGER' && employee) {
-      const teamIds = new Set(employees.filter((e) => e.manager_id === employee.id).map((e) => e.id));
+      const teamIds = new Set(activeEmployees.filter((e) => e.manager_id === employee.id).map((e) => e.id));
       return tasks.filter((t) => teamIds.has(t.assigned_to) || t.assigned_to === employee.id);
     }
     if (employee) return tasks.filter((t) => t.assigned_to === employee.id);
     return [];
-  }, [role, employee, employees, tasks]);
+  }, [role, employee, activeEmployees, tasks]);
 
   const today = new Date().toISOString().slice(0, 10);
   const countableTasks = useMemo(

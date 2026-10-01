@@ -28,7 +28,7 @@ export default function ProjectsPage() {
     const { role } = useOutletContext<Ctx>();
     const canManage = role === 'SUPER_ADMIN' || role === 'HR' || role === 'MANAGER';
     const { clients, loading: clientsLoading, error: clientsError } = useClients();
-    const { employees } = useAppData();
+    const { employees, activeEmployees } = useAppData();
     const { projects, addProject, updateProject, loading: projectsLoading, error: projectsError } = useProjects();
     const { tasks, loading: tasksLoading, error: tasksError } = useTasks();
 
@@ -332,7 +332,7 @@ export default function ProjectsPage() {
                         </Field>
                         <Field label="Team members">
                             <select multiple value={teamMembers} onChange={(e) => setTeamMembers(Array.from(e.target.selectedOptions, (option) => option.value))} className="w-full border px-3 py-2 text-sm outline-none" style={inputStyle}>
-                                {employees.map((employee) => (
+                                {activeEmployees.map((employee) => (
                                     <option key={employee.id} value={employee.id}>
                                         {employee.name}
                                     </option>

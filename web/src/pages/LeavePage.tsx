@@ -108,7 +108,7 @@ function RequestRow({
 export default function LeavePage() {
   const { role } = useOutletContext<Ctx>();
   const { profile } = useAuth();
-  const { employees } = useAppData();
+  const { employees, activeEmployees } = useAppData();
   const { requests, requestLeave, updateRequest, approve, reject } = useLeaveRequests();
   const employee = profile
     ? employees.find(
@@ -144,20 +144,20 @@ export default function LeavePage() {
   const canApproveOrg = role === 'HR' || role === 'SUPER_ADMIN';
   const canSubmitForOthers = canApproveTeam || canApproveOrg;
   const directReports = useMemo(
-    () => (employee ? employees.filter((item) => item.manager_id === employee.id) : []),
-    [employee, employees],
+    () => (employee ? activeEmployees.filter((item) => item.manager_id === employee.id) : []),
+    [activeEmployees, employee],
   );
   const requestableEmployees = canApproveOrg
-    ? employees
+    ? activeEmployees
     : employee
       ? [employee, ...directReports]
       : [];
 
   const teamRequests = useMemo(() => {
     if (!canApproveTeam || !employee) return [];
-    const teamIds = new Set(employees.filter((e) => e.manager_id === employee.id).map((e) => e.id));
+    const teamIds = new Set(activeEmployees.filter((e) => e.manager_id === employee.id).map((e) => e.id));
     return requests.filter((r) => teamIds.has(r.employee_id));
-  }, [canApproveTeam, employee, employees, requests]);
+  }, [activeEmployees, canApproveTeam, employee, requests]);
 
   const orgRequests = canApproveOrg ? requests : [];
 

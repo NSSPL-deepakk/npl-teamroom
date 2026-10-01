@@ -20,7 +20,7 @@ const TEAM_FILTERS: { value: TeamFilter; label: string }[] = [
 
 export default function TeamPage() {
     const { role } = useOutletContext<Ctx>();
-    const { employees, employeesLoading, employeesError, departments, designations } = useAppData();
+    const { employees, activeEmployees, employeesLoading, employeesError, departments, designations } = useAppData();
     const manager = useCurrentEmployee(role, employees);
     const today = new Date().toLocaleDateString('en-CA');
     const { records, loading: attendanceLoading, error: attendanceError } = useAttendance({ startDate: today, endDate: today });
@@ -30,8 +30,8 @@ export default function TeamPage() {
     const [filter, setFilter] = useState<TeamFilter>('ALL');
 
     const teamMembers = useMemo(
-        () => manager ? employees.filter((employee) => employee.manager_id === manager.id) : [],
-        [employees, manager],
+        () => manager ? activeEmployees.filter((employee) => employee.manager_id === manager.id) : [],
+        [activeEmployees, manager],
     );
     const teamIds = useMemo(() => new Set(teamMembers.map((employee) => employee.id)), [teamMembers]);
 
@@ -74,7 +74,6 @@ export default function TeamPage() {
         });
     }, [rows, search, filter]);
 
-    const activeTeam = teamMembers.filter((employee) => employee.employment_status === 'ACTIVE');
     const checkedInCount = rows.filter((row) => row.firstSession).length;
     const onLeaveCount = rows.filter((row) => row.status === 'On leave').length;
     const pendingLeaveCount = requests.filter((request) => request.status === 'PENDING' && teamIds.has(request.employee_id)).length;
@@ -97,7 +96,7 @@ export default function TeamPage() {
                     <p className="font-mono text-xs uppercase tracking-[0.16em]" style={{ color: 'var(--accent-structure)' }}>Team</p>
                     <h1 className="font-display mt-1 text-2xl font-semibold" style={{ color: 'var(--ink)' }}>My team</h1>
                     <p className="mt-1 text-sm" style={{ color: 'var(--text-secondary)' }}>
-                        {manager ? `${teamMembers.length} direct report${teamMembers.length === 1 ? '' : 's'} · ${activeTeam.length} active` : 'No employee profile is linked to your manager account.'}
+                        {manager ? `${teamMembers.length} active direct report${teamMembers.length === 1 ? '' : 's'}` : 'No employee profile is linked to your manager account.'}
                     </p>
                 </div>
                 {pendingLeaveCount > 0 && (

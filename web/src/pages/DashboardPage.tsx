@@ -17,18 +17,14 @@ import { useAppData } from '../contexts/AppDataContext';
 type Ctx = { role: Role };
 
 function useProfileCounts() {
-  const [counts, setCounts] = useState({ users: 0, activeUsers: 0 });
+  const [counts, setCounts] = useState({ activeUsers: 0 });
 
   useEffect(() => {
     async function loadCounts() {
       const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-      const [usersResult, activeUsersResult] = await Promise.all([
-        supabase.from('profiles').select('*', { count: 'exact', head: true }),
-        supabase.from('profiles').select('*', { count: 'exact', head: true }).gte('last_active_at', since),
-      ]);
-      if (usersResult.error) console.error('[Dashboard] Could not count users:', usersResult.error);
+      const activeUsersResult = await supabase.from('profiles').select('*', { count: 'exact', head: true }).gte('last_active_at', since);
       if (activeUsersResult.error) console.error('[Dashboard] Could not count active users:', activeUsersResult.error);
-      setCounts({ users: usersResult.count ?? 0, activeUsers: activeUsersResult.count ?? 0 });
+      setCounts({ activeUsers: activeUsersResult.count ?? 0 });
     }
     void loadCounts();
   }, []);
@@ -39,27 +35,27 @@ function useProfileCounts() {
 type DashboardHolidayData = { holidays: DashboardEvent[]; holidayCount: number; loading: boolean; error: string | null };
 
 function SuperAdminDashboard({ holidayData }: { holidayData: DashboardHolidayData }) {
-  const { employees, departments } = useAppData();
-  const { users, activeUsers } = useProfileCounts();
+  const { employees, activeEmployees, departments } = useAppData();
+  const { activeUsers } = useProfileCounts();
+  const inactiveEmployees = employees.length - activeEmployees.length;
   return (
     <>
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
-        <StatCard label="Users" value={users} status="structure" />
-        <StatCard label="Employees" value={employees.length} status="present" />
+        <StatCard label="Total employees" value={employees.length} status="structure" />
+        <StatCard label="Active employees" value={activeEmployees.length} status="present" />
         <StatCard label="Departments" value={departments.length} status="structure" />
         <StatCard label="Active users (24h)" value={activeUsers} status="present" />
         <StatCard label="Holidays this year" value={holidayData.holidayCount} status="pending" />
       </div>
 
-      <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_1fr]">
-        <LedgerPanel title="Organization attendance — today">
+      <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
+        <LedgerPanel title="Employee status">
           <div className="px-5 py-5">
             <AttendanceDonut
-              centerLabel="Employees"
+              centerLabel="Total employees"
               segments={[
-                { label: 'Present', value: 98, color: 'var(--status-present)' },
-                { label: 'On leave', value: 14, color: 'var(--status-pending)' },
-                { label: 'Absent', value: 6, color: 'var(--status-absent)' },
+                { label: 'Active', value: activeEmployees.length, color: 'var(--status-present)' },
+                { label: 'Inactive', value: inactiveEmployees, color: 'var(--status-absent)' },
               ]}
             />
           </div>
@@ -105,14 +101,13 @@ function useHrRecruitmentData() {
 }
 
 function HRDashboard({ holidayData }: { holidayData: DashboardHolidayData }) {
-  const { employees, employeesLoading, employeesError } = useAppData();
+  const { activeEmployees, employeesLoading, employeesError } = useAppData();
   const today = new Date().toLocaleDateString('en-CA');
   const { records, loading: attendanceLoading, error: attendanceError } = useAttendance({ startDate: today, endDate: today });
   const { requests, loading: leaveLoading, error: leaveError } = useLeaveRequests();
   const recruitment = useHrRecruitmentData();
   const year = new Date().getFullYear();
   const month = new Date().getMonth();
-  const activeEmployees = employees.filter((employee) => employee.employment_status === 'ACTIVE');
   const activeEmployeeIds = new Set(activeEmployees.map((employee) => employee.id));
   const todayRecords = records.filter((record) => record.date === today && record.check_in && activeEmployeeIds.has(record.employee_id));
   const leaveToday = requests.filter((request) => request.status === 'APPROVED' && request.start_date <= today && request.end_date >= today && activeEmployeeIds.has(request.employee_id));
@@ -141,7 +136,7 @@ function HRDashboard({ holidayData }: { holidayData: DashboardHolidayData }) {
         <StatCard label="Holidays this year" value={holidayData.holidayCount} status="pending" />
       </div>
 
-      <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_1fr]">
+      <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
         <LedgerPanel title="Attendance — today">
           <div className="px-5 py-5">
             <AttendanceDonut
@@ -171,14 +166,14 @@ function HRDashboard({ holidayData }: { holidayData: DashboardHolidayData }) {
 }
 
 function ManagerDashboard({ holidayData }: { holidayData: DashboardHolidayData }) {
-  const { employees, departments, departmentsLoading, departmentsError } = useAppData();
+  const { activeEmployees, departments, departmentsLoading, departmentsError } = useAppData();
   const today = new Date().toLocaleDateString('en-CA');
   const { records, loading: attendanceLoading, error: attendanceError } = useAttendance({ startDate: today, endDate: today });
   const { requests, loading: leaveLoading, error: leaveError } = useLeaveRequests();
   const { tasks, loading: tasksLoading, error: tasksError } = useTasks();
   const { profile, loading: authLoading } = useAuth();
   const managerId = profile?.employee_id ?? null;
-  const teamMembers = employees.filter((employee) => employee.employment_status === 'ACTIVE' && employee.manager_id === managerId);
+  const teamMembers = activeEmployees.filter((employee) => employee.manager_id === managerId);
   const teamMemberIds = new Set(teamMembers.map((employee) => employee.id));
   const todayRecords = records.filter((record) => record.date === today && teamMemberIds.has(record.employee_id));
   const approvedLeave = requests.filter((request) => request.status === 'APPROVED' && request.start_date <= today && request.end_date >= today && teamMemberIds.has(request.employee_id));
@@ -218,7 +213,7 @@ function ManagerDashboard({ holidayData }: { holidayData: DashboardHolidayData }
         <StatCard label="Open tasks" value={openTaskCount} status="structure" />
       </div>
 
-      <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_1fr]">
+      <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
         <LedgerPanel title="Team attendance — today">
           <div className="px-5 py-5">
             <AttendanceDonut

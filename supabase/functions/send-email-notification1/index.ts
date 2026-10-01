@@ -174,6 +174,12 @@ Deno.serve(async (request) => {
     );
   }
 
+  const { data: employeeActive, error: statusError } =
+    await userClient.rpc('is_current_employee_active');
+  if (statusError || employeeActive !== true) {
+    return json({ error: 'Your account is inactive.' }, 403);
+  }
+
   const adminClient = createClient(
     supabaseUrl,
     serviceRoleKey,
@@ -318,8 +324,8 @@ Deno.serve(async (request) => {
       </p>
       <p>
         ${escapeHtml(
-          announcement.description ?? '',
-        )}
+      announcement.description ?? '',
+    )}
       </p>
     `;
   }
@@ -383,7 +389,7 @@ Deno.serve(async (request) => {
     const isManager =
       caller.role === 'MANAGER' &&
       caller.employee_id ===
-        requestEmployee.manager_id;
+      requestEmployee.manager_id;
 
     if (
       !isOwner &&
@@ -429,9 +435,9 @@ Deno.serve(async (request) => {
               (profile) =>
                 profile.role === 'HR' ||
                 profile.role ===
-                  'SUPER_ADMIN' ||
+                'SUPER_ADMIN' ||
                 profile.employee_id ===
-                  requestEmployee.manager_id,
+                requestEmployee.manager_id,
             )
             .map(
               (profile) => profile.email,
@@ -512,10 +518,9 @@ Deno.serve(async (request) => {
       );
     } catch (error) {
       failures.push(
-        `${recipient}: ${
-          error instanceof Error
-            ? error.message
-            : String(error)
+        `${recipient}: ${error instanceof Error
+          ? error.message
+          : String(error)
         }`,
       );
 

@@ -46,7 +46,7 @@ function minutesBetween(checkIn: string | null, checkOut: string | null): number
 export default function AttendancePage() {
   const navigate = useNavigate();
   const { role } = useOutletContext<Ctx>();
-  const { employees, departments, designations } = useAppData();
+  const { employees, activeEmployees, departments, designations } = useAppData();
   const employee = useCurrentEmployee(role, employees);
   const { holidays } = useHolidays();
   const { requests: leaveRequests, refresh: refreshLeaveRequests } = useLeaveRequests();
@@ -348,11 +348,12 @@ export default function AttendancePage() {
   }), [organizationAllRows, departmentFilter, employeeFilter, searchTerm, statusFilter, managerFilter, organizationWorkMode]);
 
   const organizationMetrics = useMemo(() => {
-    const activeEmployees = employees;
-    const present = todayDetailRows.filter((row) => row.present);
-    const leave = todayDetailRows.filter((row) => row.approvedLeave);
-    const holiday = todayDetailRows.filter((row) => row.holiday && !row.present && !row.approvedLeave);
-    const rows = organizationAllRows;
+    const activeEmployeeIds = new Set(activeEmployees.map((employee) => employee.id));
+    const activeTodayRows = todayDetailRows.filter((row) => activeEmployeeIds.has(row.employee.id));
+    const present = activeTodayRows.filter((row) => row.present);
+    const leave = activeTodayRows.filter((row) => row.approvedLeave);
+    const holiday = activeTodayRows.filter((row) => row.holiday && !row.present && !row.approvedLeave);
+    const rows = organizationAllRows.filter((row) => activeEmployeeIds.has(row.employee.id));
     const requiredMinutes = rows.reduce((sum, row) => sum + row.requiredMinutes, 0);
     const workedMinutes = rows.reduce((sum, row) => sum + row.workedMinutes, 0);
     const overtime = rows.reduce((sum, row) => sum + row.overtime, 0);
@@ -363,15 +364,15 @@ export default function AttendancePage() {
       absentToday: Math.max(0, activeEmployees.length - present.length - leave.length - holiday.length),
       onLeave: leave.length,
       holiday: holiday.length,
-      wfh: todayDetailRows.filter((row) => row.wfh).length,
-      late: todayDetailRows.filter((row) => row.late).length,
+      wfh: activeTodayRows.filter((row) => row.wfh).length,
+      late: activeTodayRows.filter((row) => row.late).length,
       requiredMinutes,
       workedMinutes,
       overtime,
       shortfall,
       attendance: requiredMinutes ? Math.min(100, (workedMinutes / requiredMinutes) * 100) : 0,
     };
-  }, [employees, todayDetailRows, organizationAllRows]);
+  }, [activeEmployees, todayDetailRows, organizationAllRows]);
 
   const titleEmployee = targetEmployee ?? currentEmployee;
   const approvalMessage = approvalAction?.action === 'approve' ? 'Are you sure you want to approve this record?' : 'Are you sure you want to reject this record?';
@@ -403,7 +404,7 @@ export default function AttendancePage() {
 
   if (isSuperAdmin) {
     const metricCards = [
-      ['Total Employees', organizationMetrics.totalEmployees, 'var(--ink)', 'all'],
+      ['Active Employees', organizationMetrics.totalEmployees, 'var(--ink)', 'all'],
       ['Present', organizationMetrics.presentToday, 'var(--status-present)', 'present'],
       ['Absent', organizationMetrics.absentToday, 'var(--status-absent)', 'absent'],
       ['On Leave', organizationMetrics.onLeave, '#F59E0B', 'leave'],
@@ -475,7 +476,7 @@ export default function AttendancePage() {
                 style={{ borderColor: 'var(--line)', borderRadius: 'var(--radius-sm)' }}
               >
                 <option value="ALL">All teams / managers</option>
-                {employees.filter((emp) => !emp.manager_id).map((manager) => (
+                {activeEmployees.filter((emp) => !emp.manager_id).map((manager) => (
                   <option key={manager.id} value={manager.id}>{manager.name}</option>
                 ))}
               </select>

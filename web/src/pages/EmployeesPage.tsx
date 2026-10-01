@@ -17,6 +17,7 @@ type EmployeeSource = 'MANUAL' | 'ONBOARDING';
 
 const WORK_MODES: WorkMode[] = ['OFFICE', 'WFH', 'HYBRID'];
 const EMPLOYEE_ROLE_OPTIONS: Exclude<Role, 'SUPER_ADMIN'>[] = ['EMPLOYEE', 'MANAGER', 'HR'];
+const MANAGER_DESIGNATION = /\b(?:manager|ceo|chief executive officer|cto|chief technology officer|chief technical officer|director)\b/i;
 
 type FormState = {
   name: string;
@@ -66,7 +67,7 @@ export default function EmployeesPage() {
   const { role } = useOutletContext<Ctx>();
   const canManage = role === 'SUPER_ADMIN' || role === 'HR';
 
-  const { employees, addEmployee, updateEmployee, toggleEmployeeStatus: toggleStatus, refreshEmployees, departments, designations } = useAppData();
+  const { employees, activeEmployees, addEmployee, updateEmployee, toggleEmployeeStatus: toggleStatus, refreshEmployees, departments, designations } = useAppData();
   const { accounts, loading: accountsLoading, refresh: refreshAccounts } = useEmployeeAccounts();
   const { candidates, openings } = useRecruitment();
   const { records: onboardingRecords, activateEmployee, refresh: refreshOnboarding, loading: onboardingLoading } = useOnboarding(candidates);
@@ -91,17 +92,16 @@ export default function EmployeesPage() {
   const eligibleOnboardingRecords = useMemo(() => onboardingRecords.filter((record) => !record.employee_id), [onboardingRecords]);
 
   const managerCandidates = useMemo(
-    () =>
-      employees.filter(
-        (employee) =>
-          employee.id !== editingId &&
-          employee.department_id === form.department_id &&
-          accounts.some(
-            (user) =>
-              user.role === 'MANAGER' && user.login_enabled && user.employee_id === employee.id,
-          ),
-      ),
-    [employees, editingId, form.department_id, accounts],
+    () => activeEmployees.filter((employee) => {
+      const title = designations.find((designation) => designation.id === employee.designation_id)?.name ?? '';
+      return employee.id !== editingId && (
+        MANAGER_DESIGNATION.test(title) ||
+        accounts.some(
+          (user) => user.role === 'MANAGER' && user.login_enabled && user.employee_id === employee.id,
+        )
+      );
+    }),
+    [activeEmployees, editingId, accounts, designations],
   );
 
   useEffect(() => {
@@ -135,7 +135,8 @@ export default function EmployeesPage() {
         e.employee_code.toLowerCase().includes(q) ||
         e.email.toLowerCase().includes(q);
       const matchesDept = deptFilter === 'ALL' || e.department_id === deptFilter;
-      const matchesStatus = statusFilter === 'ALL' || e.employment_status === statusFilter;
+      const matchesStatus = statusFilter === 'ALL'
+        || (statusFilter === 'ACTIVE' ? e.employment_status === 'ACTIVE' : e.employment_status !== 'ACTIVE');
       return matchesSearch && matchesDept && matchesStatus;
     });
   }, [employees, search, deptFilter, statusFilter]);

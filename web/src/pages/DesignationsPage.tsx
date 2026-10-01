@@ -12,7 +12,7 @@ const inputStyle = { borderColor: 'var(--line)', borderRadius: 'var(--radius-sm)
 export default function DesignationsPage() {
   const { role } = useOutletContext<Ctx>();
   const canManage = role === 'SUPER_ADMIN';
-  const { designations, designationsError, addDesignation, updateDesignation, removeDesignation, departments, employees } = useAppData();
+  const { designations, designationsError, addDesignation, updateDesignation, removeDesignation, departments, activeEmployees } = useAppData();
   const [name, setName] = useState('');
   const [departmentIds, setDepartmentIds] = useState<string[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -24,7 +24,7 @@ export default function DesignationsPage() {
   const missingDepartmentIds = matchingDesignation
     ? departmentIds.filter((id) => !matchingDesignation.department_ids.includes(id))
     : departmentIds;
-  const countFor = (id: string) => employees.filter((e) => e.designation_id === id).length;
+  const countFor = (id: string) => activeEmployees.filter((e) => e.designation_id === id).length;
 
   function resetForm() {
     setName('');

@@ -1,4 +1,5 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 
 const corsHeaders = {
@@ -21,6 +22,36 @@ Deno.serve(async (req) => {
   }
 
   try {
+    const authorization = req.headers.get('Authorization');
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const anonKey = Deno.env.get('SUPABASE_ANON_KEY');
+    if (!authorization?.startsWith('Bearer ') || !supabaseUrl || !anonKey) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    const userClient = createClient(supabaseUrl, anonKey, {
+      global: { headers: { Authorization: authorization } },
+    });
+    const token = authorization.slice('Bearer '.length);
+    const { data: authData, error: authError } = await userClient.auth.getUser(token);
+    if (authError || !authData.user) {
+      return new Response(JSON.stringify({ error: 'Invalid session' }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    const { data: employeeActive, error: statusError } = await userClient.rpc('is_current_employee_active');
+    if (statusError || employeeActive !== true) {
+      return new Response(JSON.stringify({ error: 'Your account is inactive.' }), {
+        status: 403,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     const body = await req.json();
 
     const messages = body.messages as ChatMessage[];

@@ -11,16 +11,34 @@ const inputStyle = { borderColor: 'var(--line)', borderRadius: 'var(--radius-sm)
 export default function DepartmentsPage() {
   const { role } = useOutletContext<Ctx>();
   const canManage = role === 'SUPER_ADMIN';
-  const { departments, addDepartment, removeDepartment, employees } = useAppData();
+  const { departments, addDepartment, updateDepartment, removeDepartment, departmentsError, activeEmployees } = useAppData();
   const [name, setName] = useState('');
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [removeId, setRemoveId] = useState<string | null>(null);
 
-  const countFor = (id: string) => employees.filter((e) => e.department_id === id).length;
+  const countFor = (id: string) => activeEmployees.filter((e) => e.department_id === id).length;
 
-  function handleAdd(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!name.trim()) return;
-    addDepartment(name.trim());
+    const cleanName = name.trim();
+    if (!cleanName) return;
+    if (editingId) {
+      if (await updateDepartment(editingId, cleanName)) {
+        setEditingId(null);
+        setName('');
+      }
+      return;
+    }
+    if (await addDepartment(cleanName)) setName('');
+  }
+
+  function startEditing(id: string, departmentName: string) {
+    setEditingId(id);
+    setName(departmentName);
+  }
+
+  function cancelEditing() {
+    setEditingId(null);
     setName('');
   }
 
@@ -60,13 +78,24 @@ export default function DepartmentsPage() {
                   {countFor(d.id)} people
                 </span>
                 {canManage && (
-                  <button
-                    onClick={() => setRemoveId(d.id)}
-                    className="font-mono text-[11px] uppercase tracking-wide hover:underline"
-                    style={{ color: 'var(--status-absent)' }}
-                  >
-                    Remove
-                  </button>
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => startEditing(d.id, d.name)}
+                      className="font-mono text-[11px] uppercase tracking-wide hover:underline"
+                      style={{ color: 'var(--accent-structure)' }}
+                    >
+                      Edit
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setRemoveId(d.id)}
+                      className="font-mono text-[11px] uppercase tracking-wide hover:underline"
+                      style={{ color: 'var(--status-absent)' }}
+                    >
+                      Remove
+                    </button>
+                  </div>
                 )}
               </div>
             ))
@@ -76,9 +105,10 @@ export default function DepartmentsPage() {
         {canManage && (
           <div className="h-fit border bg-white p-5" style={{ borderColor: 'var(--line-soft)', borderRadius: 'var(--radius-md)' }}>
             <h3 className="text-sm font-semibold" style={{ color: 'var(--ink)' }}>
-              Add a department
+              {editingId ? 'Edit department' : 'Add a department'}
             </h3>
-            <form onSubmit={handleAdd} className="mt-4 space-y-4">
+            {departmentsError && <p className="mt-2 text-sm text-red-700">{departmentsError}</p>}
+            <form onSubmit={handleSubmit} className="mt-4 space-y-4">
               <label className="block">
                 <span className="text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--text-secondary)' }}>
                   Name
@@ -98,8 +128,9 @@ export default function DepartmentsPage() {
                 className="w-full py-2.5 text-sm font-medium transition-opacity hover:opacity-90"
                 style={{ background: 'var(--accent-structure)', color: 'white', borderRadius: 'var(--radius-sm)' }}
               >
-                Add department
+                {editingId ? 'Save changes' : 'Add department'}
               </button>
+              {editingId && <button type="button" onClick={cancelEditing} className="w-full border py-2.5 text-sm font-medium" style={{ borderColor: 'var(--line)', color: 'var(--ink)', borderRadius: 'var(--radius-sm)' }}>Cancel</button>}
             </form>
           </div>
         )}

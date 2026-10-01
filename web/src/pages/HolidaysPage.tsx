@@ -25,7 +25,7 @@ type CalendarRow = {
 const FILTERS: FilterKey[] = ['ALL', 'Holiday', 'In-office celebration', 'Announcement', 'Birthday', 'Anniversary'];
 const CATEGORY_OPTIONS: HolidayCategory[] = ['National Holiday', 'Optional Holiday', 'Company Holiday', 'In-office celebration', 'Announcement'];
 const PAGE_SIZE = 10;
-const UPCOMING_WINDOW_DAYS = 10;
+const UPCOMING_WINDOW_MONTHS = 3;
 
 function rowStyle(group: CalendarRow['group']) {
   switch (group) {
@@ -65,9 +65,12 @@ export default function HolidaysPage() {
   const [page, setPage] = useState(1);
   const [removeId, setRemoveId] = useState<string | null>(null);
   const today = getTodayIso();
-  const windowEndDate = new Date(`${today}T00:00:00`);
-  windowEndDate.setDate(windowEndDate.getDate() + UPCOMING_WINDOW_DAYS - 1);
+  const windowStartDate = new Date(`${today}T00:00:00`);
+  const windowEndDate = new Date(windowStartDate);
+  windowEndDate.setMonth(windowEndDate.getMonth() + UPCOMING_WINDOW_MONTHS);
+  windowEndDate.setDate(windowEndDate.getDate() - 1);
   const lastDateInWindow = `${windowEndDate.getFullYear()}-${String(windowEndDate.getMonth() + 1).padStart(2, '0')}-${String(windowEndDate.getDate()).padStart(2, '0')}`;
+  const lookaheadDays = Math.round((Date.parse(`${lastDateInWindow}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / 86_400_000);
 
   function handleImageUpload(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -83,7 +86,7 @@ export default function HolidaysPage() {
   }
 
   const generatedRows = useMemo<CalendarRow[]>(() => {
-    return employees.flatMap((employee) => getUpcomingEmployeeEvents(employee, new Date(`${today}T00:00:00`), UPCOMING_WINDOW_DAYS - 1)).map((event) => ({
+    return employees.flatMap((employee) => getUpcomingEmployeeEvents(employee, new Date(`${today}T00:00:00`), lookaheadDays)).map((event) => ({
       id: event.id,
       date: event.date,
       event_time: null,
@@ -96,7 +99,7 @@ export default function HolidaysPage() {
       source: 'computed',
       employeeId: event.employeeId,
     }));
-  }, [employees, today]);
+  }, [employees, lookaheadDays, today]);
 
   const combined = useMemo<CalendarRow[]>(() => {
     const manual: CalendarRow[] = holidays.map((h) => ({
@@ -224,11 +227,6 @@ export default function HolidaysPage() {
 
       <div className={`mt-6 grid gap-6 ${canManage ? 'lg:grid-cols-[1fr_320px]' : ''}`}>
         <div className="border bg-white" style={{ borderColor: 'var(--line-soft)', borderRadius: 'var(--radius-md)' }}>
-          <div className="border-b px-5 py-3.5" style={{ borderColor: 'var(--line-soft)' }}>
-            <h3 className="text-sm font-semibold" style={{ color: 'var(--ink)' }}>
-              {filtered.length} item{filtered.length !== 1 ? 's' : ''} in the next {UPCOMING_WINDOW_DAYS} days
-            </h3>
-          </div>
           {filtered.length === 0 ? (
             <p className="px-5 py-8 text-center text-sm" style={{ color: 'var(--text-muted)' }}>
               No items in this category yet.
@@ -251,15 +249,15 @@ export default function HolidaysPage() {
                       style={{ border: '1px solid var(--line-soft)' }}
                     />
                     <span
-                      className="flex h-11 w-11 shrink-0 flex-col items-center justify-center leading-none"
+                      className="flex h-12 w-12 shrink-0 flex-col items-center justify-center leading-none"
                       style={{
                         background: 'var(--accent-holiday-bg)',
                         color: 'var(--accent-holiday)',
                         borderRadius: 'var(--radius-sm)',
                       }}
                     >
-                      <span className="font-mono text-sm font-semibold">{row.date.slice(8, 10)}</span>
-                      <span className="font-mono text-[9px] uppercase">
+                      <span className="font-mono text-lg font-semibold">{row.date.slice(8, 10)}</span>
+                      <span className="font-mono text-[10px] uppercase">
                         {new Date(row.date + 'T00:00:00').toLocaleDateString('en-IN', { month: 'short' })}
                       </span>
                     </span>

@@ -12,7 +12,7 @@ export const TASK_LABELS: Record<OnboardingCategory, string[]> = {
 };
 
 export interface OnboardingTask { id: string; label: string; category: OnboardingCategory; completed: boolean; }
-export interface OnboardingDocument { id: string; document_type: OnboardingDocumentType; file_name: string; storage_path: string; mime_type: string; file_size: number; }
+export interface OnboardingDocument { id: string; document_type: OnboardingDocumentType; file_name: string; storage_path: string; mime_type: string; file_size: number; verified: boolean; }
 export interface PersonalInformation { full_name: string; date_of_birth: string; gender: string; personal_email: string; phone: string; alternate_phone: string; address: string; city: string; state: string; postal_code: string; country: string; }
 export interface EmergencyContact { contact_name: string; relationship: string; phone: string; alternate_phone: string; address: string; }
 export interface BankDetails { account_holder_name: string; bank_name: string; account_number: string; ifsc_code: string; branch: string; }
@@ -38,7 +38,7 @@ function normalizeRecord(row: any, candidates: Candidate[], tasks: any[], docume
     const completed = recordTasks.filter((task) => task.completed).length;
     const convertedToEmployee = Boolean(row.employee_id);
     const progress = convertedToEmployee ? 100 : Math.round((completed / 5) * 100);
-    return { ...row, tasks: recordTasks, status: convertedToEmployee ? 'COMPLETED' : !row.started ? 'PENDING' : progress === 100 ? 'COMPLETED' : 'IN_PROGRESS', progress, candidate, personal: personal.find((item: any) => item.candidate_id === row.candidate_id || item.employee_id === row.employee_id) ?? null, emergency: emergency.find((item: any) => item.candidate_id === row.candidate_id || item.employee_id === row.employee_id) ?? null, bank: bank.find((item: any) => item.candidate_id === row.candidate_id || item.employee_id === row.employee_id) ?? null, documents: documents.filter((item: any) => item.candidate_id === row.candidate_id || item.employee_id === row.employee_id).map((item: any) => ({ ...item, file_size: Number(item.file_size ?? 0) })) };
+    return { ...row, tasks: recordTasks, status: convertedToEmployee ? 'COMPLETED' : !row.started ? 'PENDING' : progress === 100 ? 'COMPLETED' : 'IN_PROGRESS', progress, candidate, personal: personal.find((item: any) => item.candidate_id === row.candidate_id || item.employee_id === row.employee_id) ?? null, emergency: emergency.find((item: any) => item.candidate_id === row.candidate_id || item.employee_id === row.employee_id) ?? null, bank: bank.find((item: any) => item.candidate_id === row.candidate_id || item.employee_id === row.employee_id) ?? null, documents: documents.filter((item: any) => item.candidate_id === row.candidate_id || item.employee_id === row.employee_id).map((item: any) => ({ ...item, file_size: Number(item.file_size ?? 0), verified: Boolean(item.verified) })) };
 }
 
 export function useOnboarding(candidates: Candidate[]) {

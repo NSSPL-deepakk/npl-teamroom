@@ -56,6 +56,33 @@ export function useEmployees() {
         refresh();
     }, [refresh]);
 
+    useEffect(() => {
+        const channel = supabase
+            .channel('employees-data')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'employees' }, (payload) => {
+                if (payload.eventType === 'DELETE') {
+                    const id = String((payload.old as Partial<Employee>).id ?? '');
+                    if (id) setEmployees((prev) => prev.filter((employee) => employee.id !== id));
+                    return;
+                }
+
+                const changedEmployee = payload.new as Employee;
+                if (!changedEmployee.id) return;
+                setEmployees((prev) => {
+                    const exists = prev.some((employee) => employee.id === changedEmployee.id);
+                    const next = exists
+                        ? prev.map((employee) => employee.id === changedEmployee.id ? changedEmployee : employee)
+                        : [...prev, changedEmployee];
+                    return next.sort((a, b) => a.employee_code.localeCompare(b.employee_code));
+                });
+            })
+            .subscribe();
+
+        return () => {
+            void supabase.removeChannel(channel);
+        };
+    }, []);
+
     const addEmployee = useCallback(
         async (e: Omit<Employee, 'id' | 'employee_code'>) => {
             const employee_code = nextEmployeeCode(employees);

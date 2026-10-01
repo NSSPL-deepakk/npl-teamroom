@@ -16,7 +16,7 @@ export default function DocumentsPage() {
   const { role } = useOutletContext<Ctx>();
   const canManage = role === 'SUPER_ADMIN' || role === 'HR';
   const { documents, loading, error, addDocument, removeDocument, openDocument } = useCompanyDocuments();
-  const { employees, departments, designations } = useAppData();
+  const { activeEmployees, departments, designations } = useAppData();
 
   const [showModal, setShowModal] = useState(false);
   const [file, setFile] = useState<File | null>(null);
@@ -51,12 +51,12 @@ export default function DocumentsPage() {
       ? selectedDocument.visible_employee_ids
       : selectedDocument.visibility === 'MANAGER_ONLY'
         ? managerEmployeeIds
-        : employees.map((employee) => employee.id);
+        : activeEmployees.map((employee) => employee.id);
     const uniqueIds = [...new Set(ids)];
     return uniqueIds
-      .map((id) => employees.find((employee) => employee.id === id))
-      .filter((employee): employee is (typeof employees)[number] => Boolean(employee));
-  }, [employees, managerEmployeeIds, selectedDocument]);
+      .map((id) => activeEmployees.find((employee) => employee.id === id))
+      .filter((employee): employee is (typeof activeEmployees)[number] => Boolean(employee));
+  }, [activeEmployees, managerEmployeeIds, selectedDocument]);
 
   function handleDrag(e: React.DragEvent) {
     e.preventDefault();
@@ -167,7 +167,7 @@ export default function DocumentsPage() {
     setShowModal(false);
   }
 
-  const matchingEmployees = employees.filter((employee) => employee.name.toLowerCase().includes(employeeSearch.trim().toLowerCase()));
+  const matchingEmployees = activeEmployees.filter((employee) => employee.name.toLowerCase().includes(employeeSearch.trim().toLowerCase()));
 
   function toggleEmployee(employeeId: string) {
     setSelectedEmployeeIds((current) => current.includes(employeeId) ? current.filter((id) => id !== employeeId) : [...current, employeeId]);

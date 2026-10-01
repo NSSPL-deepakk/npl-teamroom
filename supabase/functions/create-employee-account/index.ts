@@ -53,6 +53,11 @@ Deno.serve(async (request) => {
         return json({ error: 'Invalid session' }, 401);
     }
 
+    const { data: employeeActive, error: statusError } = await userClient.rpc('is_current_employee_active');
+    if (statusError || employeeActive !== true) {
+        return json({ error: 'Your account is inactive.' }, 403);
+    }
+
     const adminClient = createClient(supabaseUrl, serviceRoleKey);
     const { data: callerProfile, error: callerError } = await adminClient
         .from('profiles')

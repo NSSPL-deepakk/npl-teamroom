@@ -53,7 +53,6 @@ export function StatCard({
     Employees: '/employees',
     'Total employees': '/employees',
     Departments: '/departments',
-    'Active users (24h)': '/users',
     'Holidays this year': '/holidays',
     'New joiners (mtd)': '/employees',
     'Team members': '/employees',

@@ -7,20 +7,20 @@ import { StatCard, LedgerPanel } from '../components/Ledger';
 type ReportSelection = 'active' | 'inactive' | 'total' | 'departments' | `department:${string}`;
 
 export default function ReportsPage() {
-  const { employees, employeesLoading, employeesError, departments, departmentsLoading, departmentsError } = useAppData();
+  const { employees, activeEmployees, employeesLoading, employeesError, departments, departmentsLoading, departmentsError } = useAppData();
   const [selection, setSelection] = useState<ReportSelection>('active');
 
   const now = new Date();
 
-  const activeCount = employees.filter((e) => e.employment_status === 'ACTIVE').length;
-  const inactiveCount = employees.length - activeCount;
+  const activeCount = activeEmployees.length;
+  const inactiveCount = employees.filter((employee) => employee.employment_status !== 'ACTIVE').length;
 
   const deptBreakdown = useMemo(
     () =>
       departments
-        .map((d) => ({ ...d, count: employees.filter((e) => e.department_id === d.id).length }))
+        .map((d) => ({ ...d, count: activeEmployees.filter((e) => e.department_id === d.id).length }))
         .sort((a, b) => b.count - a.count),
-    [departments, employees],
+    [departments, activeEmployees],
   );
 
   const selectedDepartmentId = selection.startsWith('department:') ? selection.slice('department:'.length) : null;
@@ -29,11 +29,11 @@ export default function ReportsPage() {
     : null;
   const selectedEmployees = useMemo(() => {
     if (selection === 'active') return employees.filter((employee) => employee.employment_status === 'ACTIVE');
-    if (selection === 'inactive') return employees.filter((employee) => employee.employment_status === 'INACTIVE');
+    if (selection === 'inactive') return employees.filter((employee) => employee.employment_status !== 'ACTIVE');
     if (selection === 'total') return employees;
-    if (selectedDepartmentId) return employees.filter((employee) => employee.department_id === selectedDepartmentId);
+    if (selectedDepartmentId) return activeEmployees.filter((employee) => employee.department_id === selectedDepartmentId);
     return [];
-  }, [employees, selectedDepartmentId, selection]);
+  }, [activeEmployees, employees, selectedDepartmentId, selection]);
 
   const reportTitle = selectedDepartment?.name ?? (
     selection === 'active' ? 'Active employees' :

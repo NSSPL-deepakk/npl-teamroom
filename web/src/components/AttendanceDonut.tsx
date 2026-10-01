@@ -7,8 +7,8 @@ interface DonutSegment {
 export function AttendanceDonut({
   segments,
   centerLabel,
-  size = 148,
-  thickness = 20,
+  size = 160,
+  thickness = 22,
 }: {
   segments: DonutSegment[];
   centerLabel: string;
@@ -21,7 +21,7 @@ export function AttendanceDonut({
   let cumulative = 0;
 
   return (
-    <div className="flex items-center gap-6">
+    <div className="flex flex-col items-center gap-5">
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="shrink-0">
         <g transform={`translate(${size / 2}, ${size / 2}) rotate(-90)`}>
           <circle r={radius} fill="none" stroke="var(--line-soft)" strokeWidth={thickness} />
@@ -67,7 +67,7 @@ export function AttendanceDonut({
 
       <ul className="space-y-2.5">
         {segments.map((s, i) => (
-          <li key={i} className="flex items-center gap-2.5 text-sm">
+          <li key={i} className="flex items-center justify-center gap-2.5 text-sm">
             <span className="h-2.5 w-2.5 shrink-0" style={{ background: s.color, borderRadius: '1px' }} />
             <span style={{ color: 'var(--text-secondary)' }}>{s.label}</span>
             <span className="font-mono ml-1 text-xs" style={{ color: 'var(--text-muted)' }}>

@@ -56,5 +56,21 @@ export function useDepartments() {
         setDepartments((prev) => prev.filter((d) => d.id !== id));
     }, []);
 
-    return { departments, loading, error, addDepartment, removeDepartment, refresh };
+    const updateDepartment = useCallback(async (id: string, name: string) => {
+        const { data, error: updateError } = await supabase
+            .from('departments')
+            .update({ name })
+            .eq('id', id)
+            .select('id, name')
+            .single();
+        if (updateError) {
+            setError(updateError.message);
+            return false;
+        }
+        setError(null);
+        setDepartments((prev) => prev.map((department) => department.id === id ? data : department).sort((a, b) => a.name.localeCompare(b.name)));
+        return true;
+    }, []);
+
+    return { departments, loading, error, addDepartment, updateDepartment, removeDepartment, refresh };
 }

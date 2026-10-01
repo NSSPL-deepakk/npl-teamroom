@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { RosterStrip } from '../components/RosterStrip';
-import { useAuth } from '../contexts/AuthContext';
+import { EMPLOYEE_DEACTIVATED_MESSAGE, useAuth } from '../contexts/AuthContext';
 
 export default function LoginPage() {
   const navigate = useNavigate();
@@ -23,7 +23,9 @@ export default function LoginPage() {
           ? 'Your session expired. Please sign in again.'
           : reason === 'logged_in_elsewhere'
             ? 'You were signed out because this account was signed in on another device or browser.'
-            : '',
+            : reason === 'deactivated'
+              ? EMPLOYEE_DEACTIVATED_MESSAGE
+              : '',
       );
       consumedLocationKey.current = location.key;
       navigate(location.pathname, { replace: true, state: null });

@@ -25,11 +25,10 @@ export default function RecruitmentPage() {
     const location = useLocation();
     const navigate = useNavigate();
     const { role } = useOutletContext<Ctx>();
-    const { openings, candidates: allCandidates, interviews, offers, addOpening, updateOpening, toggleOpening, addCandidate, updateCandidate, scheduleInterview, loading, actionLoading, error } = useRecruitment({
-        includeInterviews: true,
+    const { openings, candidates: allCandidates, offers, addOpening, updateOpening, toggleOpening, addCandidate, updateCandidate, scheduleInterview, loading, actionLoading, error } = useRecruitment({
         includeOffers: true,
     });
-    const { departments, employees } = useAppData();
+    const { departments, activeEmployees: employees } = useAppData();
     const [openingDrawer, setOpeningDrawer] = useState(false);
     const [candidateDrawer, setCandidateDrawer] = useState(false);
     const [editingOpening, setEditingOpening] = useState<JobOpening | null>(null);
@@ -49,16 +48,15 @@ export default function RecruitmentPage() {
         setSelectedCandidate((current) => current ? allCandidates.find((candidate) => candidate.id === current.id) ?? current : current);
     }, [allCandidates]);
 
-    const scheduledInterviewIds = useMemo(() => new Set(interviews.filter((interview) => interview.status === 'SCHEDULED').map((interview) => interview.candidate_id)), [interviews]);
-    const candidates = useMemo(() => allCandidates.filter((candidate) => candidateFilter === 'all' || (candidateFilter === 'interviews' ? scheduledInterviewIds.has(candidate.id) : candidate.stage === candidateFilter)), [allCandidates, candidateFilter, scheduledInterviewIds]);
+    const candidates = useMemo(() => allCandidates.filter((candidate) => candidateFilter === 'all' || candidate.stage === (candidateFilter === 'interviews' ? 'INTERVIEW' : candidateFilter)), [allCandidates, candidateFilter]);
     const counts = useMemo(() => ({
         open: openings.filter((opening) => opening.status === 'OPEN').length,
         candidates: allCandidates.length,
-        interviews: scheduledInterviewIds.size,
+        interviews: allCandidates.filter((candidate) => candidate.stage === 'INTERVIEW').length,
         offers: offers.filter((offer) => ['SENT', 'ACCEPTED'].includes(offer.status)).length,
         hired: allCandidates.filter((candidate) => candidate.stage === 'HIRED').length,
         closed: openings.filter((opening) => opening.status === 'CLOSED').length,
-    }), [openings, allCandidates, offers, scheduledInterviewIds]);
+    }), [openings, allCandidates, offers]);
     const filteredOpenings = openings.filter((opening) => (openingFilter === 'ALL' || opening.status === openingFilter) && (!search.trim() || `${opening.title} ${opening.department} ${opening.location}`.toLowerCase().includes(search.toLowerCase())));
     const openingName = (id: string) => openings.find((opening) => opening.id === id)?.title ?? 'Unknown position';
 
